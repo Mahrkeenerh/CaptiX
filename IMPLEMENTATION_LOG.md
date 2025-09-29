@@ -450,6 +450,79 @@ class ScreenshotOverlay(QWidget):
 - **Block 4.4:** Event handling system ready for mouse tracking
 - **Window management:** Solid base for interactive selection interface
 
+### Block 4.2: Screen Capture & Frozen Background ✅ COMPLETED
+
+#### Implemented Features:
+
+##### 1. Screen Capture Integration
+- ✅ **Integrated ScreenCapture system** - Reused existing `utils/capture.py` functionality
+- ✅ **Frozen screen capture** - Captures current screen state when overlay launches
+- ✅ **Cursor inclusion** - Frozen background includes cursor as specified
+- ✅ **PIL to QPixmap conversion** - Proper image format conversion for PyQt6 display
+
+##### 2. True Fullscreen Implementation  
+- ✅ **Fixed window manager conflicts** - Eliminated doubled panels/docks issue
+- ✅ **True fullscreen mode** - Using `showFullScreen()` instead of `setGeometry()`
+- ✅ **Perfect screen coverage** - No compression or distortion of background image
+- ✅ **Clean desktop takeover** - Hides all window manager elements properly
+
+##### 3. Background Display System
+- ✅ **QPixmap background rendering** - Frozen screen displayed in `paintEvent()`
+- ✅ **RGB format handling** - Proper RGBA to RGB conversion with white background
+- ✅ **Full resolution display** - Background image shown at native resolution
+- ✅ **Fallback system** - Gray overlay when screen capture fails
+
+##### 4. Resource Management
+- ✅ **Capture system cleanup** - Proper X11 connection cleanup on overlay close
+- ✅ **Memory management** - QPixmap resources freed on exit
+- ✅ **Error handling** - Graceful fallback when screen capture fails
+
+### Technical Implementation:
+
+**Screen Capture Integration:**
+```python
+def capture_frozen_screen(self):
+    self.capture_system = ScreenCapture()
+    screen_image = self.capture_system.capture_full_screen(include_cursor=True)
+    # Convert PIL Image to QPixmap with proper RGB handling
+    qimage = QImage(image_bytes, width, height, QImage.Format.Format_RGB888)
+    self.frozen_screen = QPixmap.fromImage(qimage)
+```
+
+**True Fullscreen Mode:**
+- **Before:** `setGeometry(combined_rect)` - left window manager elements visible
+- **After:** `showFullScreen()` - complete desktop takeover
+- **Result:** No doubled panels, perfect fullscreen coverage
+
+**Background Rendering:**
+```python
+def paintEvent(self, event: QPaintEvent):
+    painter = QPainter(self)
+    if self.frozen_screen:
+        painter.drawPixmap(self.rect(), self.frozen_screen, self.frozen_screen.rect())
+```
+
+### Testing Results:
+- ✅ **Frozen screen capture**: 1920x950 resolution captured with cursor visible
+- ✅ **True fullscreen**: No window manager interference, perfect coverage
+- ✅ **Background display**: Frozen screen shows correctly without distortion
+- ✅ **Resource cleanup**: Proper X11 connection and memory cleanup
+- ✅ **Performance**: Fast capture and display, no noticeable lag
+- ✅ **Cross-resolution**: Works properly with different screen sizes
+
+### Code Quality:
+- Clean integration with existing capture system
+- Proper error handling and fallback mechanisms
+- Resource cleanup in both normal and error conditions
+- Type hints and comprehensive logging
+- Modular design ready for dark overlay layer
+
+### Foundation for Next Blocks:
+- **Block 4.3:** Frozen background ready for dark overlay layer (70% opacity)
+- **Block 4.4:** Perfect coordinate system for window highlighting
+- **Block 4.5:** Solid foundation for mouse event handling
+- **Capture system integration:** Proven PIL to QPixmap pipeline for future features
+
 ---
 
 ## Phase 5: Global Hotkey System & Daemon - PLANNED
