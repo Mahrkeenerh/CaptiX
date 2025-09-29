@@ -93,42 +93,101 @@ This document outlines the development phases for CaptiX, a fast screenshot and 
 ## Phase 4: Screenshot UI with Area Selection
 
 ### Goals
-- Create full-screen overlay interface for area selection
-- Implement selection rectangle drawing
-- Add pixel-perfect magnifier
-- Complete interactive screenshot workflow
+- Create interactive overlay interface with real-time window highlighting
+- Implement drag selection with magnifier
+- Add pixel-perfect selection tools
+- Provide visual feedback for window detection
 
-### Tasks
-1. **Screenshot Overlay** (`screenshot_ui.py`)
-   - PyQt6 full-screen transparent window
-   - Install PyQt6 as needed
-   - Frozen screen background with cursor
-   - Dark overlay (70% opacity)
-   - Mouse event handling (click, drag, release)
+### Implementation Blocks
 
-2. **Selection Interface**
-   - Rectangle selection drawing
-   - Clear area within selection
-   - Bright selection border (2px)
-   - Real-time dimension display
+#### Block 4.1: PyQt6 Setup & Basic Overlay
+- Install PyQt6 dependency
+- Create basic full-screen transparent window
+- Test window appears and covers all monitors
+- Add escape key to close window
 
-3. **Magnifier Widget** (`utils/magnifier.py`)
-   - 150x150px zoom window
-   - 15-20x magnification
-   - Pixel grid overlay
-   - Cursor position display (X, Y coordinates)
-   - Selection dimensions during drag
+#### Block 4.2: Screen Capture & Frozen Background
+- Capture current screen state when overlay launches
+- Display frozen screen as background in overlay
+- Ensure cursor is visible in frozen capture
+- Test background shows correctly
 
-4. **Interaction Logic**
-   - Single click detection (window/desktop)
-   - Drag selection handling
-   - Escape key cancellation
-   - Immediate capture on mouse release
+#### Block 4.3: Dark Overlay Layer
+- Add 70% dark semi-transparent overlay
+- Cover entire screen with darkened layer
+- Test overlay opacity and visibility
+- Ensure overlay doesn't interfere with events
+
+#### Block 4.4: Window Highlighting System
+- Detect window under cursor in real-time
+- Add gray-white highlight overlay over detected window
+- Update highlight as cursor moves between windows
+- Clear highlight when cursor is on desktop
+
+#### Block 4.5: Basic Mouse Event Handling
+- Detect mouse clicks on overlay
+- Distinguish between single clicks and drag starts
+- Handle highlighted window click vs desktop click
+- Add basic click position logging
+
+#### Block 4.6: Window Detection Integration
+- Connect overlay clicks to existing window detection
+- Implement click-on-highlighted-window capture
+- Implement click-on-desktop full-screen capture
+- Test both capture modes work from overlay
+
+#### Block 4.7: Selection Rectangle Drawing
+- Implement click-and-drag rectangle creation
+- Draw selection border (bright, 2px)
+- Clear dark overlay within selection area
+- Show actual screen content in selection
+
+#### Block 4.8: Basic Magnifier Widget
+- Create separate magnifier window (150x150px)
+- Position magnifier near cursor
+- Capture and display magnified area under cursor
+- Test magnifier follows cursor movement
+
+#### Block 4.9: Enhanced Magnifier Features
+- Add 15-20x zoom magnification
+- Implement pixel grid overlay
+- Display current cursor coordinates (X, Y)
+- Test magnifier accuracy and performance
+
+#### Block 4.10: Selection Dimensions Display
+- Show selection width x height in magnifier
+- Update dimensions during drag operations
+- Format dimension display clearly
+- Test dimension accuracy
+
+#### Block 4.11: Capture Integration & Polish
+- Connect selection release to existing capture system
+- Ensure clipboard and file saving work from overlay
+- Add smooth overlay transitions
+- Final testing and bug fixes
+
+### Technical Architecture
+
+**Overlay Window System:**
+- Full-screen transparent PyQt6 window captures all mouse events
+- Frozen screen background shows current state with cursor visible
+- Dark overlay (70% opacity) covers entire screen
+- Real-time window highlighting provides visual feedback
+- Interactive drawing surface for UI elements
+
+**User Experience Flow:**
+1. Overlay launches with frozen screen background
+2. Dark overlay appears with real-time window highlighting
+3. User sees highlighted windows as cursor moves
+4. Click on highlighted window → captures that window
+5. Click on desktop → captures full screen
+6. Drag → creates selection rectangle with magnifier
 
 ### Deliverables
-- Complete interactive screenshot functionality
-- Working magnifier
-- Pixel-perfect selection
+- Complete interactive screenshot functionality with window highlighting
+- Real-time visual feedback for window detection
+- Working magnifier with pixel-perfect selection
+- Smooth overlay interactions and immediate capture
 - Full user experience as specified
 
 ---
