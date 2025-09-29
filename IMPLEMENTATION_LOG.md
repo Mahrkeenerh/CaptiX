@@ -374,12 +374,81 @@ The implementation exceeds the original requirements by providing true pure wind
 
 ---
 
-## Phase 4: Screenshot UI with Area Selection - PLANNED
+## Phase 4: Screenshot UI with Area Selection - IN PROGRESS
 
-### Goals:
-- Create interactive overlay interface
-- Implement drag selection with magnifier
-- Add pixel-perfect selection tools
+**Date:** September 29, 2025  
+**Git Commits:** 
+- `[pending]` - Phase 4, Block 4.1: Implement PyQt6 basic overlay window
+
+### Block 4.1: PyQt6 Setup & Basic Overlay ✅ COMPLETED
+
+#### Implemented Features:
+
+##### 1. PyQt6 Integration
+- ✅ Installed PyQt6 via pip in virtual environment
+- ✅ Resolved X11 dependencies (libxcb-cursor0) for PyQt6 system support
+- ✅ Created basic full-screen transparent overlay window
+- ✅ Configured window flags for frameless, always-on-top display
+
+##### 2. Multi-Monitor Support (`screenshot_ui.py`)
+- ✅ Screen detection using QApplication.screens()
+- ✅ Combined geometry calculation for multi-monitor setups
+- ✅ Window covers all screens automatically
+- ✅ Proper geometry logging for debugging
+
+##### 3. Window Management
+- ✅ Transparent background with minimal overlay (10 alpha for visibility test)
+- ✅ Focus management for key event reception
+- ✅ Window activation and raising to ensure visibility
+
+##### 4. Event Handling
+- ✅ Escape key detection and handling
+- ✅ Proper application exit on window close
+- ✅ Fixed PyQt6 event loop termination issue with `app.quit()`
+- ✅ Added closeEvent handler for robust cleanup
+
+##### 5. CLI Integration
+- ✅ Added `--ui` command to main.py for launching interactive UI
+- ✅ Error handling for PyQt6 import failures
+- ✅ Updated help documentation with UI command example
+
+### Technical Implementation:
+
+**PyQt6 Architecture:**
+```python
+class ScreenshotOverlay(QWidget):
+    - Frameless, always-on-top window
+    - Transparent background support
+    - Multi-monitor geometry calculation
+    - Key event handling with proper application exit
+```
+
+**Window Configuration:**
+- **Flags:** FramelessWindowHint, WindowStaysOnTopHint, Tool
+- **Attributes:** WA_TranslucentBackground for transparency
+- **Focus:** StrongFocus policy for key event reception
+- **Geometry:** Dynamic calculation covering all connected screens
+
+### Testing Results:
+- ✅ **Screen Detection:** 1920x950 screen properly detected and covered
+- ✅ **Window Display:** Overlay appears as full-screen transparent window
+- ✅ **Escape Functionality:** Escape key properly closes overlay and exits application
+- ✅ **Resource Cleanup:** Proper application termination without hanging processes
+- ✅ **CLI Integration:** `python main.py --ui` launches overlay successfully
+- ✅ **Multi-monitor Ready:** Geometry calculation supports multiple screens
+
+### Code Quality:
+- Clean PyQt6 class structure with proper inheritance
+- Comprehensive logging for debugging and monitoring
+- Error handling for missing dependencies
+- Proper resource management and cleanup
+- Type hints and documentation
+
+### Foundation for Next Blocks:
+- **Block 4.2:** Screen capture system ready for frozen background implementation
+- **Block 4.3:** Transparent overlay framework ready for dark layer addition
+- **Block 4.4:** Event handling system ready for mouse tracking
+- **Window management:** Solid base for interactive selection interface
 
 ---
 

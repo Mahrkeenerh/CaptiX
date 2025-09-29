@@ -219,6 +219,22 @@ def cmd_test_clipboard(args):
         return 1
 
 
+def cmd_screenshot_ui(args):
+    """Launch interactive screenshot UI."""
+    try:
+        from screenshot_ui import main as screenshot_ui_main
+
+        print("Launching interactive screenshot UI...")
+        return screenshot_ui_main()
+    except ImportError as e:
+        print(f"❌ Failed to import screenshot UI: {e}")
+        print("Make sure PyQt6 is installed: pip install PyQt6")
+        return 1
+    except Exception as e:
+        print(f"❌ Error launching screenshot UI: {e}")
+        return 1
+
+
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(
@@ -233,6 +249,7 @@ Examples:
   %(prog)s --screenshot --no-cursor              # Screenshot without cursor
   %(prog)s --screenshot --no-clipboard           # Screenshot without clipboard copy
   %(prog)s --screenshot --output /tmp/           # Save to custom directory
+  %(prog)s --ui                                  # Launch interactive screenshot UI
   %(prog)s --info                                # Show system information
   %(prog)s --list-windows                        # List all visible windows
   %(prog)s --window-info 500,300                 # Get window info at coordinates
@@ -242,6 +259,9 @@ Examples:
     # Commands
     parser.add_argument('--screenshot', action='store_true',
                        help='Take a screenshot')
+    parser.add_argument(
+        "--ui", action="store_true", help="Launch interactive screenshot UI (Phase 4)"
+    )
     parser.add_argument('--info', action='store_true',
                        help='Show system information')
     parser.add_argument(
@@ -287,6 +307,8 @@ Examples:
     # Execute commands
     if args.screenshot:
         return cmd_screenshot(args)
+    elif args.ui:
+        return cmd_screenshot_ui(args)
     elif args.info:
         return cmd_info(args)
     elif args.list_windows:
