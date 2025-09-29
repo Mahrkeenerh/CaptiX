@@ -35,19 +35,33 @@ def cmd_screenshot(args):
             # Parse area format: "x,y,width,height"
             try:
                 x, y, width, height = map(int, args.area.split(','))
-                filepath, size = capture_screenshot(x, y, width, height, 
-                                                  save_path=args.output, 
-                                                  include_cursor=not args.no_cursor)
+                filepath, size = capture_screenshot(
+                    x,
+                    y,
+                    width,
+                    height,
+                    save_path=args.output,
+                    include_cursor=not args.no_cursor,
+                    copy_to_clipboard=not args.no_clipboard,
+                )
             except ValueError:
                 print("Error: Area format should be 'x,y,width,height' (e.g., '100,100,800,600')")
                 return 1
         else:
             # Full screen capture
-            filepath, size = capture_screenshot(save_path=args.output, 
-                                              include_cursor=not args.no_cursor)
+            filepath, size = capture_screenshot(
+                save_path=args.output,
+                include_cursor=not args.no_cursor,
+                copy_to_clipboard=not args.no_clipboard,
+            )
         
         print(f"Screenshot saved: {filepath}")
         print(f"File size: {size} bytes ({size/1024:.1f} KB)")
+
+        # Inform user about clipboard
+        if not args.no_clipboard:
+            print("Screenshot copied to clipboard")
+
         return 0
         
     except Exception as e:
@@ -77,6 +91,24 @@ def cmd_info(args):
     return 0
 
 
+def cmd_test_clipboard(args):
+    """Test clipboard functionality."""
+    from utils.clipboard import test_clipboard_availability
+
+    print("Testing clipboard availability...")
+
+    try:
+        if test_clipboard_availability():
+            print("✅ Clipboard is available and working")
+            return 0
+        else:
+            print("❌ Clipboard is not available")
+            return 1
+    except Exception as e:
+        print(f"❌ Clipboard test failed: {e}")
+        return 1
+
+
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(
@@ -87,9 +119,10 @@ Examples:
   %(prog)s --screenshot                    # Take full screen screenshot
   %(prog)s --screenshot --area 100,100,800,600  # Capture specific area  
   %(prog)s --screenshot --no-cursor       # Screenshot without cursor
+  %(prog)s --screenshot --no-clipboard    # Screenshot without clipboard copy
   %(prog)s --screenshot --output /tmp/    # Save to custom directory
   %(prog)s --info                         # Show system information
-        """
+        """,
     )
     
     # Commands
@@ -97,12 +130,20 @@ Examples:
                        help='Take a screenshot')
     parser.add_argument('--info', action='store_true',
                        help='Show system information')
+    parser.add_argument(
+        "--test-clipboard", action="store_true", help="Test clipboard functionality"
+    )
     
     # Screenshot options
     parser.add_argument('--area', metavar='x,y,w,h',
                        help='Capture specific area (format: x,y,width,height)')
     parser.add_argument('--no-cursor', action='store_true',
                        help='Exclude cursor from screenshot')
+    parser.add_argument(
+        "--no-clipboard",
+        action="store_true",
+        help="Do not copy screenshot to clipboard",
+    )
     parser.add_argument('--output', '-o', metavar='PATH',
                        help='Output directory or file path')
     
@@ -117,6 +158,8 @@ Examples:
         return cmd_screenshot(args)
     elif args.info:
         return cmd_info(args)
+    elif args.test_clipboard:
+        return cmd_test_clipboard(args)
     else:
         parser.print_help()
         return 0

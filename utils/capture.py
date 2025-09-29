@@ -3,10 +3,11 @@ Core X11 screen capture functionality for CaptiX.
 
 This module handles all screen capture operations including:
 - Full screen capture
-- Area-based capture 
+- Area-based capture
 - Multi-monitor support
 - Cursor inclusion
 - PNG file saving
+- Clipboard integration
 """
 
 import os
@@ -18,6 +19,9 @@ from Xlib import display, X
 from Xlib.ext import randr
 from PIL import Image
 import logging
+
+# Import clipboard functionality
+from .clipboard import copy_image_to_clipboard, test_clipboard_availability
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -214,16 +218,24 @@ class ScreenCapture:
             logger.warning(f"Error during cleanup: {e}")
 
 
-def capture_screenshot(x: int = None, y: int = None, width: int = None, height: int = None, 
-                      save_path: str = None, include_cursor: bool = True) -> Tuple[str, int]:
+def capture_screenshot(
+    x: int = None,
+    y: int = None,
+    width: int = None,
+    height: int = None,
+    save_path: str = None,
+    include_cursor: bool = True,
+    copy_to_clipboard: bool = True,
+) -> Tuple[str, int]:
     """
     Convenient function to capture a screenshot.
-    
+
     Args:
         x, y, width, height: Area to capture (None for full screen)
         save_path: Where to save (None for default location)
         include_cursor: Whether to include cursor
-        
+        copy_to_clipboard: Whether to copy to clipboard (default: True)
+
     Returns:
         Tuple of (filepath, file_size_bytes)
     """
@@ -241,7 +253,19 @@ def capture_screenshot(x: int = None, y: int = None, width: int = None, height: 
             raise RuntimeError("Failed to capture screen")
         
         # Save the screenshot
-        return capture.save_screenshot(image, save_path)
+        filepath, file_size = capture.save_screenshot(image, save_path)
+
+        # Copy to clipboard if requested
+        if copy_to_clipboard:
+            try:
+                if copy_image_to_clipboard(filepath):
+                    logger.info("Screenshot copied to clipboard")
+                else:
+                    logger.warning("Failed to copy screenshot to clipboard")
+            except Exception as e:
+                logger.warning(f"Clipboard copy failed: {e}")
+
+        return filepath, file_size
         
     finally:
         capture.cleanup()
