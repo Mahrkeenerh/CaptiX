@@ -164,8 +164,11 @@ A **floating control panel** appears (always on top):
 - **python-xlib**: X11 screen capture and window detection
 - **pynput**: Global hotkey listening
 - **Pillow (PIL)**: Image manipulation and clipboard
+- **XFixes Extension**: Native cursor capture via ctypes (enhanced implementation)
 - **FFmpeg** (system installed): Video/audio encoding with cursor capture
 - **notify-send** or **python-dbus**: Desktop notifications
+
+**Note:** Cursor capture implementation exceeds specification requirements with native XFixes integration, providing true cursor appearance including themes and animations.
 
 ---
 

@@ -21,7 +21,7 @@ This document outlines the development phases for CaptiX, a fast screenshot and 
 2. **Core Screen Capture** (`utils/capture.py`)
    - Full screen capture with python-xlib
    - Area-based capture (x, y, width, height)
-   - Cursor inclusion in screenshots
+   - Native cursor capture using XFixes extension (✅ Enhanced beyond original plan)
    - Multi-monitor support
    - Save screenshots to PNG files
 

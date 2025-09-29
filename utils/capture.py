@@ -11,6 +11,8 @@ This module handles all screen capture operations including:
 """
 
 import os
+import ctypes
+import ctypes.util
 from typing import Tuple, Optional
 from datetime import datetime
 from pathlib import Path
@@ -27,6 +29,81 @@ from .clipboard import copy_image_to_clipboard
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# XFixes cursor capture using ctypes (based on PyXCursor)
+PIXEL_DATA_PTR = ctypes.POINTER(ctypes.c_ulong)
+Atom = ctypes.c_ulong
+
+
+class XFixesCursorImage(ctypes.Structure):
+    _fields_ = [
+        ("x", ctypes.c_short),
+        ("y", ctypes.c_short),
+        ("width", ctypes.c_ushort),
+        ("height", ctypes.c_ushort),
+        ("xhot", ctypes.c_ushort),
+        ("yhot", ctypes.c_ushort),
+        ("cursor_serial", ctypes.c_ulong),
+        ("pixels", PIXEL_DATA_PTR),
+        ("atom", Atom),
+        ("name", ctypes.c_char_p),
+    ]
+
+
+class Display(ctypes.Structure):
+    pass
+
+
+class XFixesCursor:
+    """Direct XFixes cursor access using ctypes."""
+
+    def __init__(self, display_name=None):
+        """Initialize XFixes cursor interface."""
+        if not display_name:
+            try:
+                display_name = os.environ["DISPLAY"].encode("utf-8")
+            except KeyError:
+                raise Exception("$DISPLAY not set.")
+
+        # Load XFixes library
+        XFixes = ctypes.util.find_library("Xfixes")
+        if not XFixes:
+            raise Exception("No XFixes library found.")
+        self.XFixeslib = ctypes.cdll.LoadLibrary(XFixes)
+
+        # Load X11 library
+        x11 = ctypes.util.find_library("X11")
+        if not x11:
+            raise Exception("No X11 library found.")
+        self.xlib = ctypes.cdll.LoadLibrary(x11)
+
+        # Set up XFixesGetCursorImage function
+        XFixesGetCursorImage = self.XFixeslib.XFixesGetCursorImage
+        XFixesGetCursorImage.restype = ctypes.POINTER(XFixesCursorImage)
+        XFixesGetCursorImage.argtypes = [ctypes.POINTER(Display)]
+        self.XFixesGetCursorImage = XFixesGetCursorImage
+
+        # Set up XOpenDisplay function
+        XOpenDisplay = self.xlib.XOpenDisplay
+        XOpenDisplay.restype = ctypes.POINTER(Display)
+        XOpenDisplay.argtypes = [ctypes.c_char_p]
+
+        # Open display
+        self.display = XOpenDisplay(display_name)
+        if not self.display:
+            raise Exception(f"Could not open display {display_name}")
+
+    def get_cursor_image(self):
+        """Get cursor image data."""
+        cursor_data = self.XFixesGetCursorImage(self.display)
+        if cursor_data:
+            return cursor_data[0]
+        return None
+
+    def close(self):
+        """Close the display connection."""
+        if hasattr(self, "display") and self.display:
+            self.xlib.XCloseDisplay(self.display)
+
 
 class ScreenCapture:
     """Handles X11 screen capture operations with cursor inclusion."""
@@ -36,7 +113,14 @@ class ScreenCapture:
         self.display = display.Display()
         self.screen = self.display.screen()
         self.root = self.screen.root
-        
+
+        # Initialize XFixes cursor interface
+        try:
+            self.xfixes_cursor = XFixesCursor()
+        except Exception as e:
+            logger.warning(f"Failed to initialize XFixes cursor: {e}")
+            self.xfixes_cursor = None
+
     def get_screen_geometry(self) -> Tuple[int, int, int, int]:
         """
         Get the full screen geometry including all monitors.
@@ -112,47 +196,106 @@ class ScreenCapture:
     
     def _add_cursor_to_image(self, image: Image.Image, offset_x: int, offset_y: int) -> Image.Image:
         """
-        Add cursor to the captured image.
-        
+        Add the actual cursor to the captured image using XFixes extension.
+
         Args:
             image: The captured image
             offset_x: X offset of the capture area
             offset_y: Y offset of the capture area
-            
+
         Returns:
-            Image with cursor overlaid
+            Image with actual cursor overlaid
         """
         try:
-            # Query cursor position
-            cursor_data = self.root.query_pointer()
-            cursor_x = cursor_data.root_x - offset_x
-            cursor_y = cursor_data.root_y - offset_y
-            
-            # Check if cursor is within the captured area
-            if 0 <= cursor_x < image.width and 0 <= cursor_y < image.height:
-                # For now, we'll draw a simple cursor representation
-                # In a more advanced implementation, we could get the actual cursor image
-                from PIL import ImageDraw
-                
-                draw = ImageDraw.Draw(image)
-                cursor_size = 16
-                
-                # Draw a simple arrow cursor
-                draw.polygon([
-                    (cursor_x, cursor_y),
-                    (cursor_x, cursor_y + cursor_size),
-                    (cursor_x + 4, cursor_y + cursor_size - 4),
-                    (cursor_x + 8, cursor_y + cursor_size + 2),
-                    (cursor_x + 10, cursor_y + cursor_size - 1),
-                    (cursor_x + 6, cursor_y + cursor_size - 5),
-                    (cursor_x + 12, cursor_y + 4)
-                ], fill='black', outline='white')
-                
+            # Check if XFixes cursor is available
+            if not self.xfixes_cursor:
+                return image
+
+            # Get the actual cursor image using XFixes
+            cursor_image = self.xfixes_cursor.get_cursor_image()
+
+            if cursor_image and cursor_image.width > 0 and cursor_image.height > 0:
+                # Get cursor position from XFixes data
+                cursor_x = cursor_image.x - offset_x
+                cursor_y = cursor_image.y - offset_y
+
+                # Check if cursor is within the captured area
+                if 0 <= cursor_x < image.width and 0 <= cursor_y < image.height:
+                    # Convert cursor data to PIL Image
+                    cursor_pil = self._convert_cursor_to_pil(cursor_image)
+
+                    if cursor_pil:
+                        # Calculate hotspot position
+                        hotspot_x = cursor_x - cursor_image.xhot
+                        hotspot_y = cursor_y - cursor_image.yhot
+
+                        # Ensure we don't paste outside image bounds
+                        if (
+                            hotspot_x + cursor_image.width > 0
+                            and hotspot_y + cursor_image.height > 0
+                            and hotspot_x < image.width
+                            and hotspot_y < image.height
+                        ):
+                            # Paste cursor onto the main image
+                            if cursor_pil.mode == "RGBA":
+                                image.paste(
+                                    cursor_pil, (hotspot_x, hotspot_y), cursor_pil
+                                )
+                            else:
+                                image.paste(cursor_pil, (hotspot_x, hotspot_y))
+
+                            logger.debug(
+                                f"Added native cursor at ({hotspot_x}, {hotspot_y})"
+                            )
+
         except Exception as e:
-            logger.warning(f"Failed to add cursor to image: {e}")
-        
+            logger.error(f"Failed to add native cursor: {e}")
+
         return image
-    
+
+    def _convert_cursor_to_pil(self, cursor_image) -> Optional[Image.Image]:
+        """
+        Convert XFixes cursor image to PIL Image.
+
+        Args:
+            cursor_image: XFixes cursor image object
+
+        Returns:
+            PIL Image or None if conversion failed
+        """
+        try:
+            width = cursor_image.width
+            height = cursor_image.height
+
+            # Cursor data is in ARGB format (32-bit) from the pixels pointer
+            pixels_ptr = cursor_image.pixels
+            if not pixels_ptr:
+                return None
+
+            # Convert to RGBA format for PIL
+            rgba_data = bytearray(width * height * 4)
+
+            for i in range(width * height):
+                # Extract ARGB components from 32-bit value
+                argb = pixels_ptr[i]
+                a = (argb >> 24) & 0xFF
+                r = (argb >> 16) & 0xFF
+                g = (argb >> 8) & 0xFF
+                b = argb & 0xFF
+
+                # Store as RGBA
+                base_idx = i * 4
+                rgba_data[base_idx] = r
+                rgba_data[base_idx + 1] = g
+                rgba_data[base_idx + 2] = b
+                rgba_data[base_idx + 3] = a
+
+            return Image.frombytes("RGBA", (width, height), bytes(rgba_data))
+
+        except Exception as e:
+            logger.error(f"Failed to convert cursor image: {e}")
+            return None
+
     def capture_full_screen(self, include_cursor: bool = True) -> Optional[Image.Image]:
         """
         Capture the full screen including all monitors.
@@ -213,6 +356,8 @@ class ScreenCapture:
     def cleanup(self):
         """Clean up X11 resources."""
         try:
+            if self.xfixes_cursor:
+                self.xfixes_cursor.close()
             self.display.close()
         except Exception as e:
             logger.warning(f"Error during cleanup: {e}")
