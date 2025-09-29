@@ -21,7 +21,7 @@ from PIL import Image
 import logging
 
 # Import clipboard functionality
-from .clipboard import copy_image_to_clipboard, test_clipboard_availability
+from .clipboard import copy_image_to_clipboard
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
