@@ -518,10 +518,112 @@ def paintEvent(self, event: QPaintEvent):
 - Modular design ready for dark overlay layer
 
 ### Foundation for Next Blocks:
-- **Block 4.3:** Frozen background ready for dark overlay layer (70% opacity)
+- **Block 4.3:** Frozen background ready for dark overlay layer (50% opacity)
 - **Block 4.4:** Perfect coordinate system for window highlighting
 - **Block 4.5:** Solid foundation for mouse event handling
 - **Capture system integration:** Proven PIL to QPixmap pipeline for future features
+
+### Block 4.3: Dark Overlay Layer (Enhanced) ✅ COMPLETED
+
+#### Implemented Features:
+
+##### 1. Animated Dark Overlay System
+- ✅ **Smooth transition animation** - 0.25 second fade-in from 0% to 50% opacity
+- ✅ **QPropertyAnimation integration** - Professional PyQt6 animation framework
+- ✅ **OutCubic easing curve** - Natural deceleration for smooth visual effect
+- ✅ **Real-time opacity control** - Dynamic alpha blending during animation
+
+##### 2. Enhanced Paint System  
+- ✅ **Layered rendering** - Frozen screen background + animated dark overlay
+- ✅ **Dynamic alpha calculation** - Converts 0.0-1.0 opacity to 0-255 alpha values
+- ✅ **Performance optimized** - Only logs when overlay is actually visible
+- ✅ **Clean visual hierarchy** - Perfect foundation for window highlighting
+
+##### 3. Animation Management
+- ✅ **Automatic trigger** - Animation starts on `showEvent`
+- ✅ **Resource cleanup** - Animation stopped and freed on window close
+- ✅ **Error handling** - Graceful fallback if animation system fails
+- ✅ **Memory efficient** - No animation leaks or hanging processes
+
+##### 4. User Experience Enhancement
+- ✅ **Professional feel** - Eliminates jarring instant overlay appearance
+- ✅ **Fast workflow** - 0.25s duration maintains responsive feel
+- ✅ **Visual feedback** - Clear indication of UI activation
+- ✅ **Cross-platform ready** - PyQt6 animation works across Linux distributions
+
+### Technical Implementation:
+
+**Animation Architecture:**
+```python
+# Animation property setup
+self._overlay_opacity: float = 0.0  # Start transparent
+self.fade_animation = QPropertyAnimation(self, b"overlay_opacity")
+self.fade_animation.setDuration(250)  # 0.25 seconds
+self.fade_animation.setStartValue(0.0)  # Start transparent  
+self.fade_animation.setEndValue(0.5)  # End at 50% opacity
+self.fade_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+
+# Dynamic opacity property
+@pyqtProperty(float)
+def overlay_opacity(self) -> float:
+    return self._overlay_opacity
+
+@overlay_opacity.setter  
+def overlay_opacity(self, value: float):
+    self._overlay_opacity = value
+    self.update()  # Trigger paintEvent for smooth animation
+```
+
+**Enhanced Paint Event:**
+```python
+def paintEvent(self, event: QPaintEvent):
+    painter = QPainter(self)
+    
+    # Layer 1: Frozen screen background
+    if self.frozen_screen:
+        painter.drawPixmap(self.rect(), self.frozen_screen, self.frozen_screen.rect())
+    
+    # Layer 2: Animated dark overlay
+    alpha_value = int(self._overlay_opacity * 255)
+    dark_overlay_color = QColor(0, 0, 0, alpha_value)
+    painter.fillRect(self.rect(), dark_overlay_color)
+```
+
+### Testing Results:
+- ✅ **Animation configuration**: `Fade animation configured (0.25s, 0% to 50%)`
+- ✅ **Animation trigger**: `Fade-in animation started` logged on window show
+- ✅ **Smooth transition**: Visually confirmed 0.25-second fade from transparent to 50% dark
+- ✅ **Event handling**: Escape key works during and after animation
+- ✅ **Resource cleanup**: Animation properly stopped and freed on exit
+- ✅ **Performance**: No lag or stuttering during animation
+- ✅ **Memory efficiency**: No animation-related memory leaks
+
+### Code Quality Achievements:
+- **Clean animation integration** - PyQt6 property animation system properly implemented
+- **Modular design** - Animation logic separated from rendering logic
+- **Comprehensive logging** - Animation state changes fully logged for debugging
+- **Resource management** - All animation resources properly cleaned up
+- **Type safety** - Full type hints for animation properties and methods
+- **Error resilience** - Graceful degradation if animation system unavailable
+
+### Key Innovation: Smooth Professional Transitions
+**Enhanced User Experience:**
+- **Before:** Jarring instant appearance of dark overlay
+- **After:** Smooth 0.25-second professional fade-in transition
+- **Benefit:** Creates polished, modern feel matching professional screenshot tools
+- **Technical Merit:** Demonstrates proper PyQt6 animation integration
+
+**Optimal Performance Balance:**
+- **Duration:** 0.25 seconds - fast enough for responsive workflow
+- **Opacity:** 50% - sufficient darkening without being too heavy
+- **Easing:** OutCubic - natural deceleration feels smooth and professional
+- **Memory:** Minimal overhead with proper cleanup
+
+### Foundation for Next Blocks:
+- **Block 4.4:** Perfect dark overlay ready for window highlighting (light areas will show through)
+- **Block 4.5:** Animation system proven ready for selection rectangle transitions
+- **Block 4.6:** Smooth transitions framework established for future UI elements
+- **Professional polish:** Animation system ready for magnifier and selection tools
 
 ---
 

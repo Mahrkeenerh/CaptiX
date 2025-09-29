@@ -2,17 +2,23 @@
 """
 CaptiX Screenshot UI - Interactive overlay for screenshot selection
 
-Phase 4, Block 4.1: PyQt6 Setup & Basic Overlay
-- Create basic full-screen transparent window
-- Test window appears and covers all monitors
-- Add escape key to close window
+Phase 4, Block 4.3: Dark Overlay Layer (Enhanced)
+- Add 50% dark semi-transparent overlay with smooth transition
+- Animate from 0% to 50% opacity over 0.25 seconds
+- Cover entire screen with darkened layer
+- Test overlay opacity and visibility
+- Ensure overlay doesn't interfere with events
+
+Previous blocks completed:
+- Block 4.1: PyQt6 Setup & Basic Overlay
+- Block 4.2: Screen Capture & Frozen Background
 """
 
 import sys
 import logging
 from typing import Optional
 from PyQt6.QtWidgets import QApplication, QWidget
-from PyQt6.QtCore import Qt, QRect
+from PyQt6.QtCore import Qt, QRect, QPropertyAnimation, QEasingCurve, pyqtProperty
 from PyQt6.QtGui import QKeyEvent, QPaintEvent, QPainter, QColor, QPixmap
 from PIL import Image
 from utils.capture import ScreenCapture
@@ -29,10 +35,13 @@ class ScreenshotOverlay(QWidget):
         super().__init__()
         self.frozen_screen: Optional[QPixmap] = None
         self.capture_system: Optional[ScreenCapture] = None
+        self._overlay_opacity: float = 0.0  # Start with no opacity
+        self.fade_animation: Optional[QPropertyAnimation] = None
 
         self.setup_window()
         self.capture_frozen_screen()
         self.setup_geometry()
+        self.setup_animation()
         
     def setup_window(self):
         """Configure the overlay window properties."""
@@ -122,6 +131,28 @@ class ScreenshotOverlay(QWidget):
         else:
             logger.error("No screens found")
 
+    def setup_animation(self):
+        """Set up the fade-in animation for the dark overlay."""
+        # Create animation for the overlay opacity
+        self.fade_animation = QPropertyAnimation(self, b"overlay_opacity")
+        self.fade_animation.setDuration(250)  # 0.25 seconds
+        self.fade_animation.setStartValue(0.0)  # Start transparent
+        self.fade_animation.setEndValue(0.5)  # End at 50% opacity
+        self.fade_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+
+        logger.info("Fade animation configured (0.25s, 0% to 50%)")
+
+    @pyqtProperty(float)
+    def overlay_opacity(self) -> float:
+        """Get the current overlay opacity (0.0 to 1.0)."""
+        return self._overlay_opacity
+
+    @overlay_opacity.setter
+    def overlay_opacity(self, value: float):
+        """Set the overlay opacity and trigger a repaint."""
+        self._overlay_opacity = value
+        self.update()  # Trigger paintEvent
+
     def keyPressEvent(self, event: QKeyEvent):
         """Handle key press events."""
         if event.key() == Qt.Key.Key_Escape:
@@ -136,7 +167,7 @@ class ScreenshotOverlay(QWidget):
             super().keyPressEvent(event)
 
     def paintEvent(self, event: QPaintEvent):
-        """Paint the overlay with frozen screen background."""
+        """Paint the overlay with frozen screen background and dark overlay."""
         painter = QPainter(self)
 
         # Draw the frozen screen background if available
@@ -150,21 +181,42 @@ class ScreenshotOverlay(QWidget):
             # Fallback: paint a light transparent background
             painter.fillRect(self.rect(), QColor(128, 128, 128, 50))
             logger.warning("No frozen screen available, using fallback background")
-        
+
+        # Draw the dark overlay layer with animated opacity
+        # Convert opacity from 0.0-1.0 to 0-255 alpha value
+        alpha_value = int(self._overlay_opacity * 255)
+        dark_overlay_color = QColor(0, 0, 0, alpha_value)
+        painter.fillRect(self.rect(), dark_overlay_color)
+
+        if alpha_value > 0:
+            logger.debug(
+                f"Dark overlay layer drawn ({self._overlay_opacity:.1%} opacity, alpha={alpha_value})"
+            )
+
     def showEvent(self, event):
         """Handle window show event."""
         super().showEvent(event)
-        
+
         # Ensure window has focus to receive key events
         self.setFocus()
         self.activateWindow()
         self.raise_()
-        
+
+        # Start the fade-in animation
+        if self.fade_animation:
+            self.fade_animation.start()
+            logger.info("Fade-in animation started")
+
         logger.info("Overlay window shown and focused")
         
     def closeEvent(self, event):
         """Handle window close event."""
         logger.info("Overlay window closing")
+
+        # Stop and clean up animation
+        if self.fade_animation:
+            self.fade_animation.stop()
+            self.fade_animation = None
 
         # Clean up capture system
         if self.capture_system:
