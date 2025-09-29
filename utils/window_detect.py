@@ -114,7 +114,132 @@ class WindowDetector:
         except Exception as e:
             logger.error(f"Failed to get window at position ({x}, {y}): {e}")
             return None
-    
+
+    def get_window_at_position_excluding(
+        self, x: int, y: int, exclude_window_id: Optional[int] = None
+    ) -> Optional[WindowInfo]:
+        """
+        Get the topmost window at the specified screen coordinates, excluding specified window IDs.
+
+        This method walks the X11 window stack to find windows beneath excluded windows.
+
+        Args:
+            x: X coordinate in screen space
+            y: Y coordinate in screen space
+            exclude_window_id: Window ID to exclude from detection (e.g., overlay window)
+
+        Returns:
+            WindowInfo object or None if no window found
+        """
+        if exclude_window_id is None:
+            # No exclusion needed, use regular detection
+            return self.get_window_at_position(x, y)
+
+        try:
+            # Get all child windows in Z-order (top to bottom)
+            windows_in_stack = self._get_window_stack()
+
+            for window in windows_in_stack:
+                try:
+                    # Skip the excluded window
+                    if window.id == exclude_window_id:
+                        logger.debug(
+                            f"Skipping excluded window ID: {exclude_window_id}"
+                        )
+                        continue
+
+                    # Check if this window contains the coordinates
+                    if self._window_contains_point(window, x, y):
+                        # Get detailed window info
+                        window_info = self._get_window_info(window)
+                        if window_info:
+                            return window_info
+
+                except (BadWindow, BadMatch):
+                    # Skip invalid windows
+                    continue
+
+            # No window found, return root window info
+            return self._create_root_window_info()
+
+        except Exception as e:
+            logger.error(
+                f"Failed to get window at position excluding {exclude_window_id}: {e}"
+            )
+            return None
+
+    def _get_window_stack(self) -> list:
+        """
+        Get all windows in the X11 window stack (Z-order).
+
+        Returns:
+            List of X11 window objects in top-to-bottom order
+        """
+        try:
+            # Query all child windows of root
+            result = self.root.query_tree()
+            children = result.children
+
+            # Return in reverse order (top to bottom in Z-order)
+            # X11 returns children in bottom-to-top order
+            return list(reversed(children))
+
+        except Exception as e:
+            logger.error(f"Failed to get window stack: {e}")
+            return []
+
+    def _window_contains_point(self, window, x: int, y: int) -> bool:
+        """
+        Check if a window contains the specified point.
+
+        Args:
+            window: X11 window object
+            x: X coordinate in screen space
+            y: Y coordinate in screen space
+
+        Returns:
+            True if window contains the point, False otherwise
+        """
+        try:
+            # Check if window is visible and valid
+            attrs = window.get_attributes()
+            if attrs.win_class != X.InputOutput or attrs.map_state != X.IsViewable:
+                return False
+
+            # Get window geometry
+            geom = window.get_geometry()
+
+            # Get absolute coordinates using the proper hierarchy walking method
+            # This fixes the negative coordinate issue with decorated windows
+            window_x, window_y = self._get_absolute_coordinates(window)
+
+            # Debug log for collision detection
+            contains = (
+                window_x <= x < window_x + geom.width
+                and window_y <= y < window_y + geom.height
+            )
+
+            if contains:
+                try:
+                    # Get window info for debug
+                    window_info = self._get_window_info(window)
+                    title = window_info.title if window_info else "Unknown"
+                    logger.debug(
+                        f"Window '{title}' at ({window_x},{window_y}) {geom.width}x{geom.height} contains point ({x},{y})"
+                    )
+                except Exception:
+                    logger.debug(
+                        f"Window at ({window_x},{window_y}) {geom.width}x{geom.height} contains point ({x},{y})"
+                    )
+
+            return contains
+
+        except (BadWindow, BadMatch):
+            return False
+        except Exception as e:
+            logger.debug(f"Error checking if window contains point: {e}")
+            return False
+
     def _create_root_window_info(self) -> WindowInfo:
         """Create WindowInfo for the root window (desktop)."""
         try:

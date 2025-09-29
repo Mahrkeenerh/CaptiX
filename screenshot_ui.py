@@ -2,16 +2,16 @@
 """
 CaptiX Screenshot UI - Interactive overlay for screenshot selection
 
-Phase 4, Block 4.3: Dark Overlay Layer (Enhanced)
-- Add 50% dark semi-transparent overlay with smooth transition
-- Animate from 0% to 50% opacity over 0.25 seconds
-- Cover entire screen with darkened layer
-- Test overlay opacity and visibility
-- Ensure overlay doesn't interfere with events
+Phase 4, Block 4.4: Window Highlighting System
+- Detect window under cursor in real-time
+- Add gray-white highlight overlay over detected window
+- Update highlight as cursor moves between windows
+- Clear highlight when cursor is on desktop
 
 Previous blocks completed:
 - Block 4.1: PyQt6 Setup & Basic Overlay
 - Block 4.2: Screen Capture & Frozen Background
+- Block 4.3: Dark Overlay Layer (Enhanced)
 """
 
 import sys
@@ -19,12 +19,13 @@ import logging
 from typing import Optional
 from PyQt6.QtWidgets import QApplication, QWidget
 from PyQt6.QtCore import Qt, QRect, QPropertyAnimation, QEasingCurve, pyqtProperty
-from PyQt6.QtGui import QKeyEvent, QPaintEvent, QPainter, QColor, QPixmap
+from PyQt6.QtGui import QKeyEvent, QPaintEvent, QPainter, QColor, QPixmap, QMouseEvent
 from PIL import Image
 from utils.capture import ScreenCapture
+from utils.window_detect import WindowDetector, WindowInfo
 
 # Set up logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)  # Enable debug logging
 logger = logging.getLogger(__name__)
 
 
@@ -35,13 +36,21 @@ class ScreenshotOverlay(QWidget):
         super().__init__()
         self.frozen_screen: Optional[QPixmap] = None
         self.capture_system: Optional[ScreenCapture] = None
+        self.window_detector: Optional[WindowDetector] = None
         self._overlay_opacity: float = 0.0  # Start with no opacity
         self.fade_animation: Optional[QPropertyAnimation] = None
+
+        # Window highlighting state
+        self.highlighted_window: Optional[WindowInfo] = None
+        self.cursor_x: int = 0
+        self.cursor_y: int = 0
+        self.last_detection_pos: tuple = (-1, -1)  # Track last detection position
 
         self.setup_window()
         self.capture_frozen_screen()
         self.setup_geometry()
         self.setup_animation()
+        self.setup_window_detection()
         
     def setup_window(self):
         """Configure the overlay window properties."""
@@ -57,7 +66,10 @@ class ScreenshotOverlay(QWidget):
         
         # Accept focus to receive key events
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        
+
+        # Enable mouse tracking to receive mouse move events
+        self.setMouseTracking(True)
+
         # Set window title for debugging
         self.setWindowTitle("CaptiX Screenshot Overlay")
         
@@ -142,6 +154,74 @@ class ScreenshotOverlay(QWidget):
 
         logger.info("Fade animation configured (0.25s, 0% to 50%)")
 
+    def setup_window_detection(self):
+        """Initialize window detection system."""
+        try:
+            self.window_detector = WindowDetector()
+            # Get our overlay window ID to exclude it from detection
+            self.overlay_window_id = int(self.winId())
+            logger.info(
+                f"Window detection system initialized, overlay window ID: {self.overlay_window_id}"
+            )
+        except Exception as e:
+            logger.error(f"Failed to initialize window detection: {e}")
+            self.window_detector = None
+            self.overlay_window_id = None
+
+    def update_window_highlight(self, x: int, y: int):
+        """Update window highlighting based on cursor position."""
+        if not self.window_detector:
+            return
+
+        # Store cursor position
+        self.cursor_x = x
+        self.cursor_y = y
+
+        # Only update detection if cursor moved significantly (reduce frequency)
+        distance_moved = abs(x - self.last_detection_pos[0]) + abs(
+            y - self.last_detection_pos[1]
+        )
+        if distance_moved < 10:  # Only detect every 10 pixels of movement
+            return
+
+        self.last_detection_pos = (x, y)
+
+        try:
+            # Get window beneath our overlay using stack walking
+            window_info = self.window_detector.get_window_at_position_excluding(
+                x, y, exclude_window_id=getattr(self, "overlay_window_id", None)
+            )
+
+            # Debug: Log the detected window information (only when it changes)
+            if window_info != self.highlighted_window:
+                if window_info:
+                    logger.info(
+                        f"Detected window at {x},{y}: {window_info.title} ({window_info.class_name}) "
+                        f"size: {window_info.width}x{window_info.height} at {window_info.x},{window_info.y} "
+                        f"is_root: {window_info.is_root}"
+                    )
+                else:
+                    logger.info(f"No window detected at {x},{y}")
+
+            # Only update if the window changed
+            if window_info != self.highlighted_window:
+                self.highlighted_window = window_info
+
+                if window_info and not window_info.is_root:
+                    logger.debug(
+                        f"Highlighting window: {window_info.title} ({window_info.class_name}) "
+                        f"at {window_info.x},{window_info.y} {window_info.width}x{window_info.height}"
+                    )
+                else:
+                    logger.debug("Cursor on desktop - clearing highlight")
+
+                # Trigger repaint to update highlight
+                self.update()
+
+        except Exception as e:
+            logger.error(f"Error updating window highlight: {e}")
+            self.highlighted_window = None
+
     @pyqtProperty(float)
     def overlay_opacity(self) -> float:
         """Get the current overlay opacity (0.0 to 1.0)."""
@@ -166,8 +246,18 @@ class ScreenshotOverlay(QWidget):
             # Pass other keys to parent
             super().keyPressEvent(event)
 
+    def mouseMoveEvent(self, event):
+        """Handle mouse move events for window highlighting."""
+        # Convert local coordinates to global screen coordinates
+        global_pos = self.mapToGlobal(event.position().toPoint())
+
+        # Update window highlighting based on cursor position
+        self.update_window_highlight(global_pos.x(), global_pos.y())
+
+        super().mouseMoveEvent(event)
+
     def paintEvent(self, event: QPaintEvent):
-        """Paint the overlay with frozen screen background and dark overlay."""
+        """Paint the overlay with frozen screen background, dark overlay, and window highlight."""
         painter = QPainter(self)
 
         # Draw the frozen screen background if available
@@ -192,6 +282,49 @@ class ScreenshotOverlay(QWidget):
             logger.debug(
                 f"Dark overlay layer drawn ({self._overlay_opacity:.1%} opacity, alpha={alpha_value})"
             )
+
+        # Draw window highlight if we have a highlighted window
+        if (
+            self.highlighted_window
+            and not self.highlighted_window.is_root
+            and alpha_value > 0
+        ):
+            self.draw_window_highlight(painter)
+
+    def draw_window_highlight(self, painter: QPainter):
+        """Draw highlight overlay over the currently highlighted window."""
+        window = self.highlighted_window
+        if not window:
+            return
+
+        # Create window rectangle
+        window_rect = QRect(window.x, window.y, window.width, window.height)
+
+        # Ensure window rectangle is within screen bounds
+        screen_rect = self.rect()
+        window_rect = window_rect.intersected(screen_rect)
+
+        if window_rect.isEmpty():
+            return
+
+        # Draw light gray-white highlight over the window area
+        # Use a light color that's visible over the dark overlay
+        highlight_color = QColor(
+            200, 200, 200, 60
+        )  # Light gray-white with 60/255 alpha (~24%)
+        painter.fillRect(window_rect, highlight_color)
+
+        # Draw a subtle border around the highlighted window
+        border_color = QColor(
+            255, 255, 255, 120
+        )  # Brighter white border with more alpha
+        painter.setPen(border_color)
+        painter.drawRect(window_rect)
+
+        logger.debug(
+            f"Window highlight drawn: {window_rect.width()}x{window_rect.height()} "
+            f"at ({window_rect.x()}, {window_rect.y()})"
+        )
 
     def showEvent(self, event):
         """Handle window show event."""
@@ -223,8 +356,16 @@ class ScreenshotOverlay(QWidget):
             self.capture_system.cleanup()
             self.capture_system = None
 
+        # Clean up window detector
+        if self.window_detector:
+            self.window_detector.cleanup()
+            self.window_detector = None
+
         # Clean up frozen screen pixmap
         self.frozen_screen = None
+
+        # Clear highlighting state
+        self.highlighted_window = None
 
         # Ensure application exits when window is closed
         app = QApplication.instance()

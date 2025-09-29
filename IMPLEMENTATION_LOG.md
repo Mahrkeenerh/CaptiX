@@ -69,11 +69,105 @@ This log tracks the implementation progress of CaptiX through all development ph
 - Proper resource cleanup for X11 connections
 - PEP 8 compliant code structure
 
-### Foundation for Next Phases:
-- Core capture system ready for clipboard integration
-- Modular design allows easy extension for UI overlay
-- Screenshot functionality can be reused for video area selection
-- CLI framework ready for daemon integration
+#### Block 4.4: Window Highlighting System ✅ COMPLETED
+
+#### Implemented Features:
+
+##### 1. X11 Stack Walking Window Detection
+- ✅ Implemented `get_window_at_position_excluding()` method with X11 window stack traversal
+- ✅ Proper Z-order window detection (top to bottom) excluding overlay window
+- ✅ Fixed coordinate calculation using hierarchy walking instead of `translate_coords()`
+- ✅ Resolves negative coordinate issues with decorated windows
+
+##### 2. Real-time Window Highlighting
+- ✅ Mouse move event handling with cursor position tracking
+- ✅ Real-time window detection as cursor moves between windows
+- ✅ Gray-white highlight overlay (60/255 alpha) over detected windows
+- ✅ Clear highlight when cursor moves to desktop areas
+- ✅ Optimized detection frequency (10-pixel movement threshold)
+
+##### 3. Visual Feedback System
+- ✅ Light gray-white highlight overlay with subtle white border
+- ✅ Window highlight properly positioned and sized to match detected windows
+- ✅ Smooth highlight updates as cursor moves between different windows
+- ✅ No highlighting when cursor is over desktop/root window
+
+##### 4. Technical Integration
+- ✅ Enhanced mouse tracking with `setMouseTracking(True)`
+- ✅ Global to local coordinate conversion for accurate positioning
+- ✅ Integration with existing window detection system
+- ✅ Proper overlay window ID exclusion from detection
+
+### Technical Implementation:
+
+**X11 Stack Walking Solution:**
+```python
+def get_window_at_position_excluding(self, x: int, y: int, exclude_window_id: Optional[int] = None)
+def _get_window_stack(self) -> list  # Z-order window traversal
+def _window_contains_point(self, window, x: int, y: int) -> bool  # Fixed coordinate calculation
+```
+
+**Coordinate System Fix:**
+- **Problem**: `translate_coords()` returns negative coordinates for decorated windows
+- **Solution**: Use existing `_get_absolute_coordinates()` method with hierarchy walking
+- **Result**: Accurate window position detection for all window types
+
+**Window Highlighting Rendering:**
+```python
+highlight_color = QColor(200, 200, 200, 60)  # Light gray-white 24% opacity
+border_color = QColor(255, 255, 255, 120)   # White border 47% opacity
+```
+
+### Testing Results:
+- ✅ **Multi-window detection**: VS Code, Nemo, Brave browser all properly highlighted
+- ✅ **Accurate positioning**: Window highlights match exact window boundaries
+- ✅ **Desktop detection**: No highlight when cursor over desktop areas
+- ✅ **Smooth transitions**: Highlight updates seamlessly as cursor moves
+- ✅ **Performance**: Optimized with 10-pixel movement threshold, no lag
+- ✅ **Coordinate accuracy**: Fixed negative coordinate issues completely
+
+### Code Quality:
+- Clean integration with existing window detection architecture
+- Proper error handling for invalid/unmapped windows
+- Efficient Z-order traversal with early termination
+- Debug logging for troubleshooting window detection
+- Resource-conscious with movement threshold optimization
+
+### Foundation for Next Blocks:
+- **Window detection ready for clicks** - Block 4.5 can use same detection system
+- **Accurate positioning proven** - Coordinates reliable for window capture
+- **Visual feedback working** - Users can see exactly which window will be captured
+- **Performance optimized** - System ready for interactive selection drawing
+
+**Major Achievement**: Successfully solved overlay window interference with X11 window detection using stack walking approach while maintaining perfect coordinate accuracy and visual feedback.
+
+---
+
+#### Block 4.5: Basic Mouse Event Handling - READY FOR IMPLEMENTATION
+
+### Goals:
+- Detect mouse clicks on overlay
+- Distinguish between single clicks and drag starts  
+- Handle highlighted window click vs desktop click
+- Add basic click position logging
+
+### Tasks:
+1. **Mouse Click Detection**
+   - Implement `mousePressEvent()` and `mouseReleaseEvent()`
+   - Detect single clicks vs drag operations
+   - Track click duration and movement
+
+2. **Click Type Classification**
+   - Click on highlighted window → window capture mode
+   - Click on desktop → full screen capture mode
+   - Click and drag → selection rectangle mode
+
+3. **Integration with Window Detection**
+   - Use existing window highlighting system to determine click target
+   - Pass window information to capture system
+   - Handle edge cases (no window detected, invalid windows)
+
+---
 
 ---
 
