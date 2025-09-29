@@ -3,6 +3,8 @@
 ## Overview
 A fast, simple screenshot and screen recording tool for Linux X11. Optimized for speed and simplicity with pixel-perfect selection.
 
+**Note:** Currently implements enhanced window capture capabilities beyond the original specification, including pure window content capture that eliminates overlapping elements using XComposite extension integration.
+
 ---
 
 ## Features

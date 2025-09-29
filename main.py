@@ -26,12 +26,31 @@ def setup_directories():
 def cmd_screenshot(args):
     """Handle screenshot command."""
     # Import here to avoid issues with path setup
-    from utils.capture import capture_screenshot, capture_window_at_position
+    from utils.capture import (
+        capture_screenshot,
+        capture_window_at_position,
+        capture_window_at_position_pure,
+    )
     
     print("Taking screenshot...")
     
     try:
-        if args.window_at:
+        if args.window_pure_at:
+            # Capture pure window content at specific coordinates
+            try:
+                x, y = map(int, args.window_pure_at.split(","))
+                filepath, size = capture_window_at_position_pure(
+                    x,
+                    y,
+                    save_path=args.output,
+                    include_cursor=not args.no_cursor,
+                    copy_to_clipboard=not args.no_clipboard,
+                )
+                print("Pure window content captured (no overlaps)")
+            except ValueError:
+                print("Error: Window position format should be 'x,y' (e.g., '500,300')")
+                return 1
+        elif args.window_at:
             # Capture window at specific coordinates
             try:
                 x, y = map(int, args.window_at.split(","))
@@ -210,6 +229,7 @@ Examples:
   %(prog)s --screenshot                           # Take full screen screenshot
   %(prog)s --screenshot --area 100,100,800,600   # Capture specific area  
   %(prog)s --screenshot --window-at 500,300      # Capture window at coordinates
+  %(prog)s --screenshot --window-pure-at 500,300 # Capture pure window content (no overlaps)
   %(prog)s --screenshot --no-cursor              # Screenshot without cursor
   %(prog)s --screenshot --no-clipboard           # Screenshot without clipboard copy
   %(prog)s --screenshot --output /tmp/           # Save to custom directory
@@ -242,6 +262,11 @@ Examples:
                        help='Capture specific area (format: x,y,width,height)')
     parser.add_argument(
         "--window-at", metavar="x,y", help="Capture window at coordinates (format: x,y)"
+    )
+    parser.add_argument(
+        "--window-pure-at",
+        metavar="x,y",
+        help="Capture pure window content at coordinates - no overlaps (format: x,y)",
     )
     parser.add_argument('--no-cursor', action='store_true',
                        help='Exclude cursor from screenshot')

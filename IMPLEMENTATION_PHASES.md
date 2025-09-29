@@ -82,6 +82,7 @@ This document outlines the development phases for CaptiX, a fast screenshot and 
    - Extend CLI to support window capture
    - Full screen vs window vs custom area modes
    - Window frame handling (with decorations)
+   - *Note: Implementation also includes pure window content capture (no overlaps) using XComposite extension*
 
 ### Deliverables
 - Reliable window detection system
