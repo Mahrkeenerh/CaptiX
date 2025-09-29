@@ -26,12 +26,26 @@ def setup_directories():
 def cmd_screenshot(args):
     """Handle screenshot command."""
     # Import here to avoid issues with path setup
-    from utils.capture import capture_screenshot
+    from utils.capture import capture_screenshot, capture_window_at_position
     
     print("Taking screenshot...")
     
     try:
-        if args.area:
+        if args.window_at:
+            # Capture window at specific coordinates
+            try:
+                x, y = map(int, args.window_at.split(","))
+                filepath, size = capture_window_at_position(
+                    x,
+                    y,
+                    save_path=args.output,
+                    include_cursor=not args.no_cursor,
+                    copy_to_clipboard=not args.no_clipboard,
+                )
+            except ValueError:
+                print("Error: Window position format should be 'x,y' (e.g., '500,300')")
+                return 1
+        elif args.area:
             # Parse area format: "x,y,width,height"
             try:
                 x, y, width, height = map(int, args.area.split(','))
@@ -81,7 +95,13 @@ def cmd_info(args):
         # Display information about the capture system
         print(f"X11 Display: {capture.display.get_display_name()}")
         print(f"Screen depth: {capture.screen.root_depth}")
-        
+
+        # Show window detection capability
+        if capture.window_detector:
+            print("Window detection: Available")
+        else:
+            print("Window detection: Not available")
+
     except Exception as e:
         print(f"Error getting system info: {e}")
         return 1
@@ -89,6 +109,77 @@ def cmd_info(args):
         capture.cleanup()
     
     return 0
+
+
+def cmd_list_windows(args):
+    """List all visible windows."""
+    from utils.capture import list_visible_windows
+
+    print("Listing visible windows...")
+
+    try:
+        windows = list_visible_windows()
+
+        if not windows:
+            print("No visible windows found.")
+            return 0
+
+        print(f"\nFound {len(windows)} visible windows:")
+        print("-" * 80)
+        print(f"{'ID':<12} {'Class':<20} {'Title':<30} {'Geometry':<15}")
+        print("-" * 80)
+
+        for window in windows:
+            # Truncate long titles and class names for display
+            class_name = (
+                window.class_name[:19]
+                if len(window.class_name) > 19
+                else window.class_name
+            )
+            title = window.title[:29] if len(window.title) > 29 else window.title
+            geometry = f"{window.width}x{window.height}"
+
+            print(f"{window.window_id:<12} {class_name:<20} {title:<30} {geometry:<15}")
+
+        return 0
+
+    except Exception as e:
+        print(f"Error listing windows: {e}")
+        return 1
+
+
+def cmd_window_info(args):
+    """Get information about window at specific coordinates."""
+    from utils.capture import get_window_info_at_position
+
+    try:
+        x, y = map(int, args.position.split(","))
+    except ValueError:
+        print("Error: Position format should be 'x,y' (e.g., '500,300')")
+        return 1
+
+    print(f"Getting window information at position ({x}, {y})...")
+
+    try:
+        window_info = get_window_info_at_position(x, y)
+
+        if not window_info:
+            print("No window found at specified position.")
+            return 1
+
+        print("\nWindow Information:")
+        print(f"  ID: {window_info.window_id}")
+        print(f"  Class: {window_info.class_name}")
+        print(f"  Title: {window_info.title}")
+        print(f"  Position: ({window_info.x}, {window_info.y})")
+        print(f"  Size: {window_info.width}x{window_info.height}")
+        print(f"  Is Root/Desktop: {window_info.is_root}")
+
+        return 0
+
+    except Exception as e:
+        print(f"Error getting window info: {e}")
+        return 1
 
 
 def cmd_test_clipboard(args):
@@ -116,12 +207,15 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  %(prog)s --screenshot                    # Take full screen screenshot
-  %(prog)s --screenshot --area 100,100,800,600  # Capture specific area  
-  %(prog)s --screenshot --no-cursor       # Screenshot without cursor
-  %(prog)s --screenshot --no-clipboard    # Screenshot without clipboard copy
-  %(prog)s --screenshot --output /tmp/    # Save to custom directory
-  %(prog)s --info                         # Show system information
+  %(prog)s --screenshot                           # Take full screen screenshot
+  %(prog)s --screenshot --area 100,100,800,600   # Capture specific area  
+  %(prog)s --screenshot --window-at 500,300      # Capture window at coordinates
+  %(prog)s --screenshot --no-cursor              # Screenshot without cursor
+  %(prog)s --screenshot --no-clipboard           # Screenshot without clipboard copy
+  %(prog)s --screenshot --output /tmp/           # Save to custom directory
+  %(prog)s --info                                # Show system information
+  %(prog)s --list-windows                        # List all visible windows
+  %(prog)s --window-info 500,300                 # Get window info at coordinates
         """,
     )
     
@@ -131,12 +225,24 @@ Examples:
     parser.add_argument('--info', action='store_true',
                        help='Show system information')
     parser.add_argument(
+        "--list-windows", action="store_true", help="List all visible windows"
+    )
+    parser.add_argument(
+        "--window-info",
+        metavar="x,y",
+        dest="position",
+        help="Get information about window at coordinates (format: x,y)",
+    )
+    parser.add_argument(
         "--test-clipboard", action="store_true", help="Test clipboard functionality"
     )
     
     # Screenshot options
     parser.add_argument('--area', metavar='x,y,w,h',
                        help='Capture specific area (format: x,y,width,height)')
+    parser.add_argument(
+        "--window-at", metavar="x,y", help="Capture window at coordinates (format: x,y)"
+    )
     parser.add_argument('--no-cursor', action='store_true',
                        help='Exclude cursor from screenshot')
     parser.add_argument(
@@ -158,6 +264,10 @@ Examples:
         return cmd_screenshot(args)
     elif args.info:
         return cmd_info(args)
+    elif args.list_windows:
+        return cmd_list_windows(args)
+    elif args.position:  # --window-info
+        return cmd_window_info(args)
     elif args.test_clipboard:
         return cmd_test_clipboard(args)
     else:

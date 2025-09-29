@@ -13,7 +13,7 @@ This module handles all screen capture operations including:
 import os
 import ctypes
 import ctypes.util
-from typing import Tuple, Optional
+from typing import Tuple, Optional, List
 from datetime import datetime
 from pathlib import Path
 
@@ -24,6 +24,8 @@ import logging
 
 # Import clipboard functionality
 from .clipboard import copy_image_to_clipboard
+# Import window detection functionality
+from .window_detect import WindowDetector, WindowInfo
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -120,6 +122,13 @@ class ScreenCapture:
         except Exception as e:
             logger.warning(f"Failed to initialize XFixes cursor: {e}")
             self.xfixes_cursor = None
+
+        # Initialize window detector for window-based capture
+        try:
+            self.window_detector = WindowDetector()
+        except Exception as e:
+            logger.warning(f"Failed to initialize window detector: {e}")
+            self.window_detector = None
 
     def get_screen_geometry(self) -> Tuple[int, int, int, int]:
         """
@@ -308,7 +317,146 @@ class ScreenCapture:
         """
         x, y, width, height = self.get_screen_geometry()
         return self.capture_screen_area(x, y, width, height, include_cursor)
-    
+
+    def get_window_at_position(self, x: int, y: int) -> Optional[WindowInfo]:
+        """
+        Get window information at the specified coordinates.
+
+        Args:
+            x: X coordinate in screen space
+            y: Y coordinate in screen space
+
+        Returns:
+            WindowInfo object or None if detection failed
+        """
+        if not self.window_detector:
+            logger.error("Window detector not available")
+            return None
+
+        return self.window_detector.get_window_at_position(x, y)
+
+    def capture_window_at_position(
+        self, x: int, y: int, include_cursor: bool = True
+    ) -> Optional[Image.Image]:
+        """
+        Capture the window at the specified coordinates.
+
+        Args:
+            x: X coordinate in screen space
+            y: Y coordinate in screen space
+            include_cursor: Whether to include the cursor in the capture
+
+        Returns:
+            PIL Image object or None if capture failed
+        """
+        window_info = self.get_window_at_position(x, y)
+        if not window_info:
+            logger.error(f"No window found at position ({x}, {y})")
+            return None
+
+        logger.info(f"Capturing window: {window_info.class_name} - {window_info.title}")
+
+        # Get screen bounds
+        screen_x, screen_y, screen_width, screen_height = self.get_screen_geometry()
+
+        # Calculate the visible portion of the window
+        # Start coordinates: where the window becomes visible on screen
+        visible_x = max(window_info.x, screen_x)
+        visible_y = max(window_info.y, screen_y)
+
+        # End coordinates: where the window ends or screen ends, whichever comes first
+        window_end_x = window_info.x + window_info.width
+        window_end_y = window_info.y + window_info.height
+
+        visible_end_x = min(window_end_x, screen_x + screen_width)
+        visible_end_y = min(window_end_y, screen_y + screen_height)
+
+        # Calculate visible dimensions
+        visible_width = visible_end_x - visible_x
+        visible_height = visible_end_y - visible_y
+
+        # Ensure we have positive dimensions
+        if visible_width <= 0 or visible_height <= 0:
+            logger.error(
+                f"Window has no visible area: {visible_width}x{visible_height}"
+            )
+            return None
+
+        logger.debug(
+            f"Window original: ({window_info.x}, {window_info.y}) {window_info.width}x{window_info.height}"
+        )
+        logger.debug(
+            f"Capturing visible area: ({visible_x}, {visible_y}) {visible_width}x{visible_height}"
+        )
+
+        return self.capture_screen_area(
+            visible_x,
+            visible_y,
+            visible_width,
+            visible_height,
+            include_cursor,
+        )
+
+    def capture_window_by_id(
+        self, window_id: int, include_cursor: bool = True
+    ) -> Optional[Image.Image]:
+        """
+        Capture a specific window by its ID.
+
+        Args:
+            window_id: X11 window ID
+            include_cursor: Whether to include the cursor in the capture
+
+        Returns:
+            PIL Image object or None if capture failed
+        """
+        if not self.window_detector:
+            logger.error("Window detector not available")
+            return None
+
+        try:
+            # Find the window in our visible windows list
+            visible_windows = self.window_detector.get_visible_windows()
+            target_window = None
+
+            for window in visible_windows:
+                if window.window_id == window_id:
+                    target_window = window
+                    break
+
+            if not target_window:
+                logger.error(f"Window with ID {window_id} not found or not visible")
+                return None
+
+            logger.info(
+                f"Capturing window by ID: {target_window.class_name} - {target_window.title}"
+            )
+
+            return self.capture_screen_area(
+                target_window.x,
+                target_window.y,
+                target_window.width,
+                target_window.height,
+                include_cursor,
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to capture window by ID {window_id}: {e}")
+            return None
+
+    def get_visible_windows(self) -> List[WindowInfo]:
+        """
+        Get a list of all visible windows.
+
+        Returns:
+            List of WindowInfo objects
+        """
+        if not self.window_detector:
+            logger.error("Window detector not available")
+            return []
+
+        return self.window_detector.get_visible_windows()
+
     def save_screenshot(self, image: Image.Image, directory: str = None, filename: str = None) -> Tuple[str, int]:
         """
         Save screenshot to file with timestamp naming.
@@ -358,6 +506,8 @@ class ScreenCapture:
         try:
             if self.xfixes_cursor:
                 self.xfixes_cursor.close()
+            if self.window_detector:
+                self.window_detector.cleanup()
             self.display.close()
         except Exception as e:
             logger.warning(f"Error during cleanup: {e}")
@@ -412,6 +562,88 @@ def capture_screenshot(
 
         return filepath, file_size
         
+    finally:
+        capture.cleanup()
+
+
+def capture_window_at_position(
+    x: int,
+    y: int,
+    save_path: str = None,
+    include_cursor: bool = True,
+    copy_to_clipboard: bool = True,
+) -> Tuple[str, int]:
+    """
+    Capture the window at the specified coordinates.
+
+    Args:
+        x: X coordinate in screen space
+        y: Y coordinate in screen space
+        save_path: Where to save (None for default location)
+        include_cursor: Whether to include cursor
+        copy_to_clipboard: Whether to copy to clipboard (default: True)
+
+    Returns:
+        Tuple of (filepath, file_size_bytes)
+    """
+    capture = ScreenCapture()
+
+    try:
+        # Capture window at position
+        image = capture.capture_window_at_position(x, y, include_cursor)
+
+        if image is None:
+            raise RuntimeError(f"Failed to capture window at position ({x}, {y})")
+
+        # Save the screenshot
+        filepath, file_size = capture.save_screenshot(image, save_path)
+
+        # Copy to clipboard if requested
+        if copy_to_clipboard:
+            try:
+                if copy_image_to_clipboard(filepath):
+                    logger.info("Screenshot copied to clipboard")
+                else:
+                    logger.warning("Failed to copy screenshot to clipboard")
+            except Exception as e:
+                logger.warning(f"Clipboard copy failed: {e}")
+
+        return filepath, file_size
+
+    finally:
+        capture.cleanup()
+
+
+def get_window_info_at_position(x: int, y: int) -> Optional[WindowInfo]:
+    """
+    Get information about the window at the specified coordinates.
+
+    Args:
+        x: X coordinate in screen space
+        y: Y coordinate in screen space
+
+    Returns:
+        WindowInfo object or None if no window found
+    """
+    capture = ScreenCapture()
+
+    try:
+        return capture.get_window_at_position(x, y)
+    finally:
+        capture.cleanup()
+
+
+def list_visible_windows() -> List[WindowInfo]:
+    """
+    Get a list of all visible windows.
+
+    Returns:
+        List of WindowInfo objects
+    """
+    capture = ScreenCapture()
+
+    try:
+        return capture.get_visible_windows()
     finally:
         capture.cleanup()
 

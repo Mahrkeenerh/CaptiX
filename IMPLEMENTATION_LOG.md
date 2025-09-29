@@ -219,12 +219,110 @@ class XFixesCursorImage(ctypes.Structure):
 
 ---
 
-## Phase 3: Window Detection - PLANNED
+## Phase 3: Window Detection ✅ COMPLETED
 
-### Goals:
-- Implement window detection for targeted capture
-- Support clicking on windows for automatic geometry
-- Handle different window managers
+**Date:** September 29, 2025  
+**Git Commits:** 
+- `4a9ac49` - Phase 3: Implement window detection and capture functionality
+
+### Implemented Features:
+
+#### 1. Window Detection System (`utils/window_detect.py`)
+- ✅ **Complete X11 window detection** - Window detection at specific coordinates using python-xlib
+- ✅ **Window geometry calculation** - Accurate window positioning with decoration handling
+- ✅ **Root window detection** - Desktop/background detection for full-screen capture
+- ✅ **Multi-window manager support** - Compatible with different X11 window managers
+- ✅ **Window property extraction** - Window class, title, and attributes retrieval
+
+#### 2. Advanced Coordinate System
+- ✅ **Fixed negative coordinate issue** - Replaced translate_coords with hierarchy walking
+- ✅ **Window decoration handling** - Proper coordinate calculation for decorated windows
+- ✅ **Parent window traversal** - Walks window hierarchy to calculate absolute positions
+- ✅ **Robust fallback system** - Multiple coordinate calculation methods with error handling
+
+#### 3. Enhanced Capture System (`utils/capture.py`)
+- ✅ **Window-specific capture** - Captures individual windows by coordinates
+- ✅ **Bounds checking** - Validates capture areas within screen boundaries
+- ✅ **Window title integration** - Shows captured window information in logs
+- ✅ **Seamless integration** - Window capture works with existing clipboard and file saving
+
+#### 4. Extended CLI Interface (`main.py`)
+- ✅ **Window capture command** - `--window-at x,y` for capturing windows at coordinates
+- ✅ **Window information display** - `--window-info x,y` for debugging window detection
+- ✅ **Window listing** - `--list-windows` to show all visible windows
+- ✅ **Enhanced help system** - Updated usage examples and documentation
+
+### Technical Implementation:
+
+**Core Window Detection:**
+```python
+class WindowDetector:
+    def get_window_at_position(self, x: int, y: int) -> Optional[WindowInfo]
+    def get_visible_windows(self) -> List[WindowInfo]
+    def _get_absolute_coordinates(self, window) -> Tuple[int, int]
+```
+
+**Coordinate System Resolution:**
+- **Problem Solved:** X11 `translate_coords()` returning negative coordinates for decorated windows
+- **Solution Implemented:** Custom hierarchy walking to accumulate coordinates from window to root
+- **Result:** Accurate positive coordinates matching actual window positions on screen
+
+**Window Information Structure:**
+```python
+class WindowInfo(NamedTuple):
+    window_id: int
+    x: int, y: int          # Absolute screen coordinates
+    width: int, height: int # Window dimensions
+    class_name: str         # Window class (e.g., "Code", "Firefox")
+    title: str             # Window title
+    is_root: bool          # True for desktop/background
+```
+
+### Testing Results:
+- ✅ **Window detection accuracy**: Correctly identifies windows at specified coordinates
+- ✅ **Coordinate precision**: Fixed negative coordinate issue, now shows accurate positions
+- ✅ **Window capture functionality**: Successfully captures individual windows without overlaps
+- ✅ **CLI integration**: All new commands (--window-at, --window-info, --list-windows) working
+- ✅ **Cross-window manager compatibility**: Works with standard X11 window managers
+- ✅ **Performance**: Fast window detection with minimal overhead
+
+**Example Test Results:**
+```bash
+# Window detection at coordinates
+$ python main.py --window-info 800,400
+Window Information:
+  ID: 79692560
+  Class: Code
+  Title: Untitled
+  Position: (308, 62)     # Positive coordinates
+  Size: 1440x858
+  Is Root/Desktop: False
+
+# Window capture
+$ python main.py --screenshot --window-at 800,400
+INFO:utils.capture:Capturing window: Code - Untitled
+Screenshot saved: Screenshot_2025-09-29_14-42-52.png (270.0 KB)
+```
+
+### Code Quality Achievements:
+- **Comprehensive error handling** - Graceful fallbacks for all window detection failures
+- **Clean architecture** - Modular design with clear separation of concerns
+- **Type safety** - Full type hints throughout the window detection system
+- **Robust logging** - Detailed debug information for troubleshooting
+- **Memory management** - Proper X11 resource cleanup and connection handling
+
+### Foundation for Next Phases:
+- **Window detection ready for UI integration** - Phase 4 can use same detection system
+- **Coordinate system reliable** - Accurate positioning for overlay interfaces
+- **Window capture proven** - Same mechanism will work for video recording areas
+- **CLI framework extended** - Ready for daemon integration and hotkey system
+
+### Major Technical Achievement:
+**Solved X11 Coordinate Translation Issue:**
+- **Root Cause:** Window manager decorations cause `translate_coords()` to return negative offsets
+- **Solution:** Implemented custom coordinate calculation via window hierarchy traversal
+- **Impact:** Enabled accurate window detection and capture functionality
+- **Benefit:** Foundation for all future window-based features in CaptiX
 
 ---
 
