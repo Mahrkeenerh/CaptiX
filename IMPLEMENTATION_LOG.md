@@ -147,25 +147,141 @@ border_color = QColor(255, 255, 255, 120)   # White border 47% opacity
 
 ### Goals:
 - Detect mouse clicks on overlay
-- Distinguish between single clicks and drag starts  
-- Handle highlighted window click vs desktop click
-- Add basic click position logging
+#### Block 4.5: Basic Mouse Event Handling ✅ COMPLETED
+
+#### Implemented Features:
+
+##### 1. Mouse Click Detection System
+- ✅ Implemented `mousePressEvent()` and `mouseReleaseEvent()` methods
+- ✅ Click duration tracking with millisecond precision
+- ✅ Mouse movement distance calculation during click/drag
+- ✅ Global coordinate conversion for accurate position logging
+
+##### 2. Click Type Classification
+- ✅ **Single Click Detection**: Duration ≤ 200ms + movement < 5px
+- ✅ **Drag Operation Detection**: Movement ≥ 5px triggers drag mode
+- ✅ **Window vs Desktop Click**: Uses existing window highlighting system
+- ✅ **Real-time Drag Feedback**: Logs drag detection during mouse movement
+
+##### 3. Action Classification Logic
+- ✅ **Click on highlighted window** → Window capture mode preparation
+- ✅ **Click on desktop/root window** → Full screen capture mode preparation  
+- ✅ **Drag operation** → Selection rectangle mode preparation
+- ✅ **Edge case handling** → No window detected defaults to desktop mode
+
+##### 4. Integration with Window Detection
+- ✅ Uses existing `highlighted_window` state from Block 4.4
+- ✅ Accesses window geometry (position, size, title, class name)
+- ✅ Proper window ID and root window detection
+- ✅ Maintains coordinate accuracy with global position mapping
+
+### Technical Implementation:
+
+**Mouse State Tracking:**
+```python
+# Mouse click tracking state variables
+self.mouse_pressed: bool = False
+self.press_start_time: float = 0.0
+self.press_position: tuple = (0, 0)  # Global coordinates
+self.click_threshold_ms: int = 200   # Max time for click vs drag
+self.drag_threshold_px: int = 5      # Min pixel movement to start drag
+```
+
+**Click Classification Algorithm:**
+```python
+def mouseReleaseEvent(self, event: QMouseEvent):
+    click_duration_ms = (time.time() - self.press_start_time) * 1000
+    distance_moved = manhattan_distance(press_position, current_position)
+    
+    if (click_duration_ms <= 200 and distance_moved < 5):
+        self.handle_single_click()  # Window or full screen capture
+    else:
+        self.handle_drag_complete() # Area selection capture
+```
+
+**Action Routing System:**
+```python
+def handle_single_click(self, x: int, y: int):
+    if target_window and not target_window.is_root:
+        # Window capture: geometry available for Block 4.6
+        logger.info(f"Window: {geometry.width}x{geometry.height} at ({geometry.x}, {geometry.y})")
+    else:
+        # Full screen capture: ready for Block 4.6
+        logger.info("Action: Would capture full screen")
+```
+
+### Testing Results:
+- ✅ **Single Click on Window**: Correctly detects VS Code, Brave browser windows
+- ✅ **Single Click on Desktop**: Properly identifies root window clicks
+- ✅ **Drag Detection**: Real-time movement tracking with 5px threshold
+- ✅ **Coordinate Accuracy**: Global positions calculated correctly
+- ✅ **Performance**: No lag during mouse tracking and click detection
+- ✅ **Edge Cases**: Handles window transitions during drag operations
+
+**Example Test Log:**
+```
+INFO: Mouse pressed at global position: (1048, 348)
+INFO: Mouse pressed on window: Untitled (Code)
+INFO: Mouse released at (1048, 348), duration: 119.7ms, moved: 0px
+INFO: Single click on window: Untitled (Code)
+INFO: Window geometry: 1920x858 at (0, 32)
+INFO: Action: Would capture this specific window
+```
+
+**Drag Operation Log:**
+```
+INFO: Drag detected: moved 19px from press position
+INFO: Drag completed: selection area 595x343 at (315, 155)
+INFO: Action: Would capture area 315,155 595x343
+```
+
+### Code Quality:
+- Clean integration with existing window highlighting system (Block 4.4)
+- Comprehensive logging for debugging and user feedback
+- Proper state management for mouse press/release cycles
+- Efficient coordinate conversion using PyQt6 `mapToGlobal()`
+- Robust edge case handling for window detection failures
+
+### Foundation for Next Blocks:
+- **Block 4.6 ready**: Click classification provides exact capture requirements
+- **Window capture data**: Complete window geometry available for capture system
+- **Desktop capture trigger**: Full screen mode detection working
+- **Area selection foundation**: Drag start/end coordinates calculated for rectangle drawing
+- **User feedback system**: Logging framework ready for capture notifications
+
+**Major Achievement**: Successfully implemented comprehensive mouse event handling that bridges window detection (Block 4.4) with future capture integration (Block 4.6), providing seamless click-to-action workflow with professional-grade precision and feedback.
+
+---
+
+#### Block 4.6: Window Detection Integration - READY FOR IMPLEMENTATION
+
+### Goals:
+- Connect overlay clicks to existing window detection system
+- Implement click-on-highlighted-window capture using existing capture system
+- Implement click-on-desktop full-screen capture
+- Test both capture modes work from overlay
 
 ### Tasks:
-1. **Mouse Click Detection**
-   - Implement `mousePressEvent()` and `mouseReleaseEvent()`
-   - Detect single clicks vs drag operations
-   - Track click duration and movement
+1. **Capture System Integration**
+   - Import and use existing `ScreenCapture` class from `utils.capture`
+   - Integrate existing `WindowDetector` for precise window capture
+   - Connect Block 4.5 click classification to actual capture execution
 
-2. **Click Type Classification**
-   - Click on highlighted window → window capture mode
-   - Click on desktop → full screen capture mode
-   - Click and drag → selection rectangle mode
+2. **Window Capture Implementation**
+   - Use `capture_window_content()` method for highlighted window capture
+   - Apply window geometry from Block 4.4 detection system
+   - Handle window capture with existing clipboard integration
 
-3. **Integration with Window Detection**
-   - Use existing window highlighting system to determine click target
-   - Pass window information to capture system
-   - Handle edge cases (no window detected, invalid windows)
+3. **Full Screen Capture Implementation**  
+   - Use `capture_full_screen()` method for desktop clicks
+   - Maintain cursor capture and existing file/clipboard workflow
+   - Apply existing timestamp naming convention
+
+4. **Integration Testing**
+   - Test window capture from overlay clicks
+   - Test full screen capture from desktop clicks
+   - Verify file saving and clipboard integration working
+   - Confirm overlay closes after successful capture
 
 ---
 

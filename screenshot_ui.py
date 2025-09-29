@@ -2,20 +2,22 @@
 """
 CaptiX Screenshot UI - Interactive overlay for screenshot selection
 
-Phase 4, Block 4.4: Window Highlighting System
-- Detect window under cursor in real-time
-- Add gray-white highlight overlay over detected window
-- Update highlight as cursor moves between windows
-- Clear highlight when cursor is on desktop
+Phase 4, Block 4.5: Basic Mouse Event Handling
+- Detect mouse clicks on overlay
+- Distinguish between single clicks and drag starts
+- Handle highlighted window click vs desktop click
+- Add basic click position logging
 
 Previous blocks completed:
 - Block 4.1: PyQt6 Setup & Basic Overlay
 - Block 4.2: Screen Capture & Frozen Background
 - Block 4.3: Dark Overlay Layer (Enhanced)
+- Block 4.4: Window Highlighting System
 """
 
 import sys
 import logging
+import time
 from typing import Optional
 from PyQt6.QtWidgets import QApplication, QWidget
 from PyQt6.QtCore import Qt, QRect, QPropertyAnimation, QEasingCurve, pyqtProperty
@@ -45,6 +47,16 @@ class ScreenshotOverlay(QWidget):
         self.cursor_x: int = 0
         self.cursor_y: int = 0
         self.last_detection_pos: tuple = (-1, -1)  # Track last detection position
+
+        # Mouse click tracking state (Block 4.5)
+        self.mouse_pressed: bool = False
+        self.press_start_time: float = 0.0
+        self.press_position: tuple = (
+            0,
+            0,
+        )  # Global coordinates where mouse was pressed
+        self.click_threshold_ms: int = 200  # Max time for click vs drag (milliseconds)
+        self.drag_threshold_px: int = 5  # Min pixel movement to start drag
 
         self.setup_window()
         self.capture_frozen_screen()
@@ -254,7 +266,129 @@ class ScreenshotOverlay(QWidget):
         # Update window highlighting based on cursor position
         self.update_window_highlight(global_pos.x(), global_pos.y())
 
+        # Check if this might be the start of a drag operation
+        if self.mouse_pressed:
+            current_pos = (global_pos.x(), global_pos.y())
+            distance_moved = abs(current_pos[0] - self.press_position[0]) + abs(
+                current_pos[1] - self.press_position[1]
+            )
+
+            if distance_moved >= self.drag_threshold_px:
+                logger.info(
+                    f"Drag detected: moved {distance_moved}px from press position"
+                )
+                # TODO: Will be implemented in Block 4.7 (Selection Rectangle Drawing)
+
         super().mouseMoveEvent(event)
+
+    def mousePressEvent(self, event: QMouseEvent):
+        """Handle mouse press events - start of click or drag."""
+        if event.button() == Qt.MouseButton.LeftButton:
+            # Convert to global coordinates
+            global_pos = self.mapToGlobal(event.position().toPoint())
+
+            # Record press details
+            self.mouse_pressed = True
+            self.press_start_time = time.time()
+            self.press_position = (global_pos.x(), global_pos.y())
+
+            logger.info(f"Mouse pressed at global position: {self.press_position}")
+
+            # Check what's under the cursor at press time
+            if self.highlighted_window:
+                if self.highlighted_window.is_root:
+                    logger.info("Mouse pressed on desktop/root window")
+                else:
+                    logger.info(
+                        f"Mouse pressed on window: {self.highlighted_window.title} ({self.highlighted_window.class_name})"
+                    )
+            else:
+                logger.info("Mouse pressed with no window detected")
+
+        super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event: QMouseEvent):
+        """Handle mouse release events - complete click or end drag."""
+        if event.button() == Qt.MouseButton.LeftButton and self.mouse_pressed:
+            # Convert to global coordinates
+            global_pos = self.mapToGlobal(event.position().toPoint())
+            current_pos = (global_pos.x(), global_pos.y())
+
+            # Calculate click duration and movement
+            click_duration_ms = (time.time() - self.press_start_time) * 1000
+            distance_moved = abs(current_pos[0] - self.press_position[0]) + abs(
+                current_pos[1] - self.press_position[1]
+            )
+
+            # Reset mouse state
+            self.mouse_pressed = False
+
+            logger.info(
+                f"Mouse released at {current_pos}, duration: {click_duration_ms:.1f}ms, moved: {distance_moved}px"
+            )
+
+            # Determine click type and handle accordingly
+            if (
+                click_duration_ms <= self.click_threshold_ms
+                and distance_moved < self.drag_threshold_px
+            ):
+                # This is a single click
+                self.handle_single_click(self.press_position[0], self.press_position[1])
+            else:
+                # This was a drag operation
+                self.handle_drag_complete(self.press_position, current_pos)
+
+        super().mouseReleaseEvent(event)
+
+    def handle_single_click(self, x: int, y: int):
+        """Handle single click - capture window or full screen."""
+        logger.info(f"Processing single click at global position ({x}, {y})")
+
+        # Use the window that was highlighted when the click started
+        target_window = self.highlighted_window
+
+        if target_window and not target_window.is_root:
+            # Clicked on a window - capture that window
+            logger.info(
+                f"Single click on window: {target_window.title} ({target_window.class_name})"
+            )
+            logger.info(
+                f"  Window geometry: {target_window.width}x{target_window.height} at ({target_window.x}, {target_window.y})"
+            )
+
+            # TODO: Block 4.6 will implement actual window capture
+            # For now, just log the intended action
+            logger.info("Action: Would capture this specific window")
+
+        else:
+            # Clicked on desktop or no window detected - capture full screen
+            logger.info("Single click on desktop - will capture full screen")
+
+            # TODO: Block 4.6 will implement actual full screen capture
+            # For now, just log the intended action
+            logger.info("Action: Would capture full screen")
+
+    def handle_drag_complete(self, start_pos: tuple, end_pos: tuple):
+        """Handle completed drag operation - capture selected area."""
+        x1, y1 = start_pos
+        x2, y2 = end_pos
+
+        # Calculate selection rectangle
+        left = min(x1, x2)
+        top = min(y1, y2)
+        right = max(x1, x2)
+        bottom = max(y1, y2)
+
+        width = right - left
+        height = bottom - top
+
+        logger.info(
+            f"Drag completed: selection area {width}x{height} at ({left}, {top})"
+        )
+
+        # TODO: Block 4.7+ will implement actual area selection capture
+        # For now, just log the intended action
+        logger.info(f"Action: Would capture area {left},{top} {width}x{height}")
 
     def paintEvent(self, event: QPaintEvent):
         """Paint the overlay with frozen screen background, dark overlay, and window highlight."""
