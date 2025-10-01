@@ -120,6 +120,11 @@ class ScreenshotOverlay(QWidget):
         # Crosshair guideline state (QoL Feature)
         self.last_crosshair_pos: tuple = (-1, -1)  # Track last crosshair position
 
+        # Window preview mode toggle (Right-click feature)
+        self.is_preview_mode_enabled: bool = (
+            True  # Default to True for bring-to-front preview
+        )
+
         self.setup_window()
         self.capture_frozen_screen()
         self.setup_geometry()
@@ -560,6 +565,16 @@ class ScreenshotOverlay(QWidget):
 
     def mouseReleaseEvent(self, event: QMouseEvent):
         """Handle mouse release events - complete click or end drag."""
+        # Handle right-click to toggle window preview mode
+        if event.button() == Qt.MouseButton.RightButton:
+            self.is_preview_mode_enabled = not self.is_preview_mode_enabled
+            logger.info(
+                f"Window preview mode toggled to: {'ON' if self.is_preview_mode_enabled else 'OFF'}"
+            )
+            self.update()  # Trigger a repaint to reflect the new state
+            return
+
+        # Handle left-click events (existing logic)
         if event.button() == Qt.MouseButton.LeftButton and self.mouse_pressed:
             # Convert to global coordinates
             global_pos = self.mapToGlobal(event.position().toPoint())
@@ -835,89 +850,77 @@ class ScreenshotOverlay(QWidget):
         if visible_window_rect.isEmpty():
             return
 
-        # Block 4.6b: Try to show actual captured window content instead of gray overlay
-        window_pixmap = self.get_window_qpixmap(window.window_id)
+        # Conditional rendering based on preview mode
+        if self.is_preview_mode_enabled:
+            # Preview ON: Show full window content (bring-to-front effect)
+            # Block 4.6b: Try to show actual captured window content instead of gray overlay
+            window_pixmap = self.get_window_qpixmap(window.window_id)
 
-        if window_pixmap:
-            # Calculate which part of the captured image to show
-            # This prevents squishing when window is partially off-screen
+            if window_pixmap:
+                # Calculate which part of the captured image to show
+                # This prevents squishing when window is partially off-screen
 
-            # Calculate offset from window origin to visible area
-            offset_x = visible_window_rect.x() - original_window_rect.x()
-            offset_y = visible_window_rect.y() - original_window_rect.y()
+                # Calculate offset from window origin to visible area
+                offset_x = visible_window_rect.x() - original_window_rect.x()
+                offset_y = visible_window_rect.y() - original_window_rect.y()
 
-            # Create source rectangle (portion of captured image to display)
-            source_rect = QRect(
-                offset_x,
-                offset_y,
-                visible_window_rect.width(),
-                visible_window_rect.height(),
-            )
-
-            # Ensure source rectangle is within pixmap bounds
-            source_rect = source_rect.intersected(window_pixmap.rect())
-
-            if not source_rect.isEmpty():
-                # Draw only the visible portion - no squishing
-                painter.drawPixmap(visible_window_rect, window_pixmap, source_rect)
-
-            # Add consistent border that stands out from window content
-            pen = painter.pen()
-            pen.setColor(QColor(0, 150, 255, 200))  # Blue border that stands out better
-            pen.setWidth(2)  # 2 pixel width for better visibility over any content
-            pen.setStyle(Qt.PenStyle.DashDotLine)  # Dash-dot style to match guidelines
-            painter.setPen(pen)
-            painter.drawRect(visible_window_rect)
-
-            # Debug for terminal window
-            if (
-                "terminal" in window.class_name.lower()
-                or "gnome-terminal" in window.class_name.lower()
-            ):
-                logger.info(f"Terminal window debug: {window.title}")
-                logger.info(f"  Window size: {window.width}x{window.height}")
-                logger.info(
-                    f"  Pixmap size: {window_pixmap.width()}x{window_pixmap.height()}"
+                # Create source rectangle (portion of captured image to display)
+                source_rect = QRect(
+                    offset_x,
+                    offset_y,
+                    visible_window_rect.width(),
+                    visible_window_rect.height(),
                 )
-                logger.info(
-                    f"  Visible rect: {visible_window_rect.width()}x{visible_window_rect.height()}"
-                )
-                logger.info(
-                    f"  Source rect: {source_rect.width()}x{source_rect.height()}"
-                )
-                # Check if we have the original image mode info
-                if window.window_id in self.captured_windows:
-                    original_mode = self.captured_windows[window.window_id].image.mode
-                    logger.info(f"  Original image mode: {original_mode}")
+
+                # Ensure source rectangle is within pixmap bounds
+                source_rect = source_rect.intersected(window_pixmap.rect())
+
+                if not source_rect.isEmpty():
+                    # Draw only the visible portion - no squishing
+                    painter.drawPixmap(visible_window_rect, window_pixmap, source_rect)
+
+                # Debug for terminal window
+                if (
+                    "terminal" in window.class_name.lower()
+                    or "gnome-terminal" in window.class_name.lower()
+                ):
+                    logger.info(f"Terminal window debug: {window.title}")
+                    logger.info(f"  Window size: {window.width}x{window.height}")
                     logger.info(
-                        f"  Image size: {self.captured_windows[window.window_id].image.size}"
+                        f"  Pixmap size: {window_pixmap.width()}x{window_pixmap.height()}"
                     )
-                else:
-                    logger.info("  No captured window data found")
+                    logger.info(
+                        f"  Visible rect: {visible_window_rect.width()}x{visible_window_rect.height()}"
+                    )
+                    logger.info(
+                        f"  Source rect: {source_rect.width()}x{source_rect.height()}"
+                    )
+                    # Check if we have the original image mode info
+                    if window.window_id in self.captured_windows:
+                        original_mode = self.captured_windows[
+                            window.window_id
+                        ].image.mode
+                        logger.info(f"  Original image mode: {original_mode}")
+                        logger.info(
+                            f"  Image size: {self.captured_windows[window.window_id].image.size}"
+                        )
+                    else:
+                        logger.info("  No captured window data found")
+        # else: Preview OFF - don't draw window content, only border will be drawn below
 
-            logger.debug(
-                f"Window content preview drawn: {visible_window_rect.width()}x{visible_window_rect.height()} "
-                f"at ({visible_window_rect.x()}, {visible_window_rect.y()}) - {window.title}"
-            )
-        else:
-            # Fallback to gray highlight if no captured content available
-            highlight_color = QColor(
-                200, 200, 200, 60
-            )  # Light gray-white with 60/255 alpha (~24%)
-            painter.fillRect(visible_window_rect, highlight_color)
+        # Always draw border for clarity (both modes)
+        pen = painter.pen()
+        pen.setColor(QColor(0, 150, 255, 200))  # Blue border that stands out better
+        pen.setWidth(2)  # 2 pixel width for better visibility over any content
+        pen.setStyle(Qt.PenStyle.DashDotLine)  # Dash-dot style to match guidelines
+        painter.setPen(pen)
+        painter.drawRect(visible_window_rect)
 
-            # Draw a consistent border
-            pen = painter.pen()
-            pen.setColor(QColor(0, 150, 255, 200))  # Same blue border
-            pen.setWidth(2)  # Same 2 pixel width
-            pen.setStyle(Qt.PenStyle.DashDotLine)  # Dash-dot style to match guidelines
-            painter.setPen(pen)
-            painter.drawRect(visible_window_rect)
-
-            logger.debug(
-                f"Window highlight drawn (fallback): {visible_window_rect.width()}x{visible_window_rect.height()} "
-                f"at ({visible_window_rect.x()}, {visible_window_rect.y()})"
-            )
+        logger.debug(
+            f"Window {'content preview' if self.is_preview_mode_enabled else 'border highlight'} drawn: "
+            f"{visible_window_rect.width()}x{visible_window_rect.height()} "
+            f"at ({visible_window_rect.x()}, {visible_window_rect.y()}) - {window.title}"
+        )
 
     def draw_crosshair_guidelines(self, painter: QPainter):
         """Draw dash-dot guidelines from cursor to screen edges for precision targeting.

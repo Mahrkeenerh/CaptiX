@@ -492,6 +492,20 @@ self.selection_rect: Optional[QRect] = None
 
 ---
 
+## Phase 4 UX Enhancement: Right-Click Window Preview Toggle ✅ COMPLETED
+
+**Date:** October 1, 2025  
+
+### Features:
+1. **Right-click toggle** for window preview mode (ON/OFF)
+2. **Default preview ON** - shows full window content on hover
+3. **Preview OFF mode** - shows only border highlights for precise drag selection
+4. **Visual feedback** in logs indicating current mode state
+
+**Result**: Solves UX conflict between window preview and drag selection precision.
+
+---
+
 **Phase 4 Progress Summary:**
 - ✅ **Blocks 4.1-4.7**: Core overlay, screen capture, dark layer, window highlighting, mouse events, temporal consistency, and selection rectangle drawing - ALL COMPLETED
 - 🔄 **Blocks 4.8-4.11**: Magnifier widgets, dimensions display, and capture integration - READY FOR IMPLEMENTATION
