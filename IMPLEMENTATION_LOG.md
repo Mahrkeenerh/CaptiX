@@ -487,33 +487,6 @@ self.selection_rect: Optional[QRect] = None
 
 ## Phase 5: Global Hotkey System & Daemon - PLANNED
 
----
-
-**Note:** Phase 4 continues with remaining blocks (4.4, 4.5, 4.7-4.11) as documented in IMPLEMENTATION_PHASES.md. Block 4.6 Enhanced Temporal Consistency Capture System has been completed and serves pre-captured content.
-
----
-
-## Phase 4.7: Window Background Post-Processing - PLANNED
-
-### Goals:
-- Standardize window background handling across different window types
-- Remove inconsistent borders and backgrounds from captured windows  
-- Implement intelligent background detection and removal
-
-### Background Issues Documented:
-- **Terminal windows**: Show transparent/proper backgrounds during capture
-- **File browser windows**: Show black borders/backgrounds during capture
-- **Root cause**: Different window types handle transparency and decoration differently during XComposite capture
-
-### Implementation Strategy:
-- **Primary approach**: Achieve transparent backgrounds for all window types (like terminals)
-- **Fallback approach**: Intelligent border detection and removal post-processing
-- **Content preservation**: Maintain window content integrity while removing artifacts
-
----
-
-## Phase 5: Global Hotkey System & Daemon - PLANNED
-
 ### Goals:
 - Background daemon with hotkey listening
 - Configuration system for customizable hotkeys
