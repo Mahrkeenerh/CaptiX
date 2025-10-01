@@ -117,6 +117,9 @@ class ScreenshotOverlay(QWidget):
         self.current_drag_pos: tuple = (0, 0)  # Current mouse position during drag
         self.selection_rect: Optional[QRect] = None  # Current selection rectangle
 
+        # Crosshair guideline state (QoL Feature)
+        self.last_crosshair_pos: tuple = (-1, -1)  # Track last crosshair position
+
         self.setup_window()
         self.capture_frozen_screen()
         self.setup_geometry()
@@ -140,6 +143,9 @@ class ScreenshotOverlay(QWidget):
 
         # Enable mouse tracking to receive mouse move events
         self.setMouseTracking(True)
+
+        # Set crosshair cursor for precision targeting
+        self.setCursor(Qt.CursorShape.CrossCursor)
 
         # Set window title for debugging
         self.setWindowTitle("CaptiX Screenshot Overlay")
@@ -485,6 +491,10 @@ class ScreenshotOverlay(QWidget):
         # Convert local coordinates to global screen coordinates
         global_pos = self.mapToGlobal(event.position().toPoint())
 
+        # Always update cursor position for crosshair guidelines
+        self.cursor_x = global_pos.x()
+        self.cursor_y = global_pos.y()
+
         # Check if this might be the start of a drag operation
         if self.mouse_pressed and not self.is_dragging:
             current_pos = (global_pos.x(), global_pos.y())
@@ -508,11 +518,17 @@ class ScreenshotOverlay(QWidget):
             # Update selection rectangle
             self.update_selection_rectangle()
 
-            # Trigger repaint to show selection rectangle
+            # Trigger repaint to show selection rectangle and crosshair guidelines
             self.update()
         else:
-            # Only update window highlighting when not dragging
+            # Update window highlighting when not dragging
             self.update_window_highlight(global_pos.x(), global_pos.y())
+
+        # Update crosshair guidelines if cursor moved (reduce repaint frequency)
+        current_crosshair_pos = (self.cursor_x, self.cursor_y)
+        if current_crosshair_pos != self.last_crosshair_pos:
+            self.last_crosshair_pos = current_crosshair_pos
+            self.update()  # Repaint for crosshair guidelines
 
         super().mouseMoveEvent(event)
 
@@ -774,7 +790,7 @@ class ScreenshotOverlay(QWidget):
             pen = painter.pen()
             pen.setColor(QColor(0, 255, 255, 255))  # Bright cyan border
             pen.setWidth(2)  # 2px border
-            pen.setStyle(Qt.PenStyle.SolidLine)
+            pen.setStyle(Qt.PenStyle.DashDotLine)  # Dash-dot style to match guidelines
             painter.setPen(pen)
             painter.drawRect(self.selection_rect)
 
@@ -799,6 +815,9 @@ class ScreenshotOverlay(QWidget):
             and not self.is_dragging
         ):
             self.draw_window_highlight(painter)
+
+        # Draw crosshair guidelines for cursor precision (QoL Feature)
+        self.draw_crosshair_guidelines(painter)
 
     def draw_window_highlight(self, painter: QPainter):
         """Draw highlight overlay over the currently highlighted window - Block 4.6b Enhanced."""
@@ -846,7 +865,7 @@ class ScreenshotOverlay(QWidget):
             pen = painter.pen()
             pen.setColor(QColor(0, 150, 255, 200))  # Blue border that stands out better
             pen.setWidth(2)  # 2 pixel width for better visibility over any content
-            pen.setStyle(Qt.PenStyle.SolidLine)  # Ensure solid line
+            pen.setStyle(Qt.PenStyle.DashDotLine)  # Dash-dot style to match guidelines
             painter.setPen(pen)
             painter.drawRect(visible_window_rect)
 
@@ -891,7 +910,7 @@ class ScreenshotOverlay(QWidget):
             pen = painter.pen()
             pen.setColor(QColor(0, 150, 255, 200))  # Same blue border
             pen.setWidth(2)  # Same 2 pixel width
-            pen.setStyle(Qt.PenStyle.SolidLine)  # Ensure solid line
+            pen.setStyle(Qt.PenStyle.DashDotLine)  # Dash-dot style to match guidelines
             painter.setPen(pen)
             painter.drawRect(visible_window_rect)
 
@@ -899,6 +918,39 @@ class ScreenshotOverlay(QWidget):
                 f"Window highlight drawn (fallback): {visible_window_rect.width()}x{visible_window_rect.height()} "
                 f"at ({visible_window_rect.x()}, {visible_window_rect.y()})"
             )
+
+    def draw_crosshair_guidelines(self, painter: QPainter):
+        """Draw dash-dot guidelines from cursor to screen edges for precision targeting.
+
+        The actual crosshair cursor is provided by Qt.CursorShape.CrossCursor.
+        This method only draws the guideline extensions to screen edges.
+        """
+        # Only draw guidelines if we have cursor position and overlay is visible
+        if self._overlay_opacity <= 0:
+            return
+
+        screen_rect = self.rect()
+        cursor_x = self.cursor_x
+        cursor_y = self.cursor_y
+
+        # Configure pen for dash-dot guidelines
+        pen = painter.pen()
+        pen.setColor(QColor(0, 150, 255, 200))  # Same blue as window highlight
+        pen.setWidth(
+            2
+        )  # Thicker lines for better visibility (matches window border width)
+        pen.setStyle(Qt.PenStyle.DashDotLine)  # Dash-dot style
+        painter.setPen(pen)
+
+        # Draw horizontal guideline (left to right across full screen)
+        painter.drawLine(screen_rect.left(), cursor_y, screen_rect.right(), cursor_y)
+
+        # Draw vertical guideline (top to bottom across full screen)
+        painter.drawLine(cursor_x, screen_rect.top(), cursor_x, screen_rect.bottom())
+
+        logger.debug(
+            f"Crosshair guidelines drawn at cursor position ({cursor_x}, {cursor_y})"
+        )
 
     def showEvent(self, event):
         """Handle window show event."""
