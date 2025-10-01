@@ -368,55 +368,71 @@ The implementation exceeds the original requirements by providing true pure wind
 
 ---
 
-## Phase 4: Screenshot UI with Area Selection ✅ COMPLETED
+## Phase 4: Screenshot UI with Area Selection ✅ BLOCKS 4.1-4.7 COMPLETED
 
 **Date:** September 29 - October 1, 2025  
 **Git Commits:** 
-- `[pending]` - Phase 4: Complete PyQt6 interactive screenshot UI
+- `[pending]` - Phase 4: Complete PyQt6 interactive screenshot UI with selection rectangle
 
-### Implemented Features:
+### Completed Features:
 
-#### 1. PyQt6 Overlay Framework (Blocks 4.1-4.3)
+#### 1. PyQt6 Overlay Framework (Blocks 4.1-4.3) ✅
 - ✅ **Full-screen transparent overlay** - PyQt6 frameless window with multi-monitor support
 - ✅ **Frozen screen capture** - Captures desktop state at overlay startup with cursor inclusion
 - ✅ **Animated dark layer** - 0.25s smooth fade-in from 0% to 50% opacity with OutCubic easing
 - ✅ **True fullscreen mode** - Complete desktop takeover hiding window manager elements
 - ✅ **Resource management** - Proper X11 connection and animation cleanup
 
-#### 2. Window Detection & Highlighting (Block 4.4)
+#### 2. Window Detection & Highlighting (Block 4.4) ✅
 - ✅ **X11 stack walking detection** - Z-order window traversal excluding overlay window
 - ✅ **Real-time window highlighting** - Content preview with blue borders during mouse hover
 - ✅ **Fixed coordinate calculation** - Hierarchy walking resolves negative coordinate issues
 - ✅ **Performance optimized** - 10-pixel movement threshold for smooth interactions
 
-#### 3. Mouse Event System (Block 4.5)
+#### 3. Mouse Event System (Block 4.5) ✅
 - ✅ **Click classification** - Distinguishes single clicks (≤200ms, <5px) vs drag operations
 - ✅ **Action routing** - Window capture, desktop capture, or area selection based on user input
 - ✅ **Global coordinate tracking** - Accurate position mapping for all mouse events
 - ✅ **Window targeting** - Uses highlighted window state for precise capture selection
 
-#### 4. Temporal Consistency Capture (Block 4.6)
+#### 4. Temporal Consistency Capture (Block 4.6) ✅
 - ✅ **Pre-capture architecture** - All content frozen at overlay startup for perfect consistency
 - ✅ **Window content storage** - Individual windows captured using XComposite for pure content
 - ✅ **Content serving system** - No real-time capture, eliminates timing issues
 - ✅ **Enhanced file naming** - `sc_YYYY-MM-DD_HHMMSS_<suffix>.png` format with type suffixes
 - ✅ **Clipboard integration** - All capture types automatically copy to clipboard
 
+#### 5. Selection Rectangle Drawing (Block 4.7) ✅ NEW
+- ✅ **Click-and-drag rectangle creation** - Detects drag start at 5px movement threshold
+- ✅ **Bright selection border** - 2px cyan border (RGB: 0, 255, 255) for high visibility
+- ✅ **Clear overlay within selection** - Dark overlay excluded from selection area, shows actual screen content
+- ✅ **Dynamic rectangle updates** - Real-time rectangle drawing during mouse drag
+- ✅ **Precise area calculation** - Accurate coordinate handling for any drag direction
+- ✅ **Visual feedback system** - Selection area shows frozen screen content without dark overlay
+
 ### Technical Implementation:
 
 **Core Architecture:**
 ```python
 class ScreenshotOverlay(QWidget):
-    # Multi-layered rendering: frozen screen + dark overlay + window highlights
+    # Multi-layered rendering: frozen screen + dark overlay + window highlights + selection rectangle
     # Temporal consistency: all content pre-captured at startup
     # Real-time preview: shows actual window content during highlighting
+    # Selection system: bright cyan border with clear content area
 ```
 
-**Capture System Integration:**
+**Enhanced Capture System Integration:**
 - **Window capture** (`_win` suffix): Uses pre-captured pure window content
 - **Desktop capture** (`_full` suffix): Uses frozen full-screen image
-- **Area capture** (`_area` suffix): Crops from frozen desktop image
+- **Area capture** (`_area` suffix): Crops from frozen desktop image  
 - **Perfect consistency**: No timing issues or window state changes
+
+**Selection Rectangle System (Block 4.7):**
+- **Drag detection**: 5px movement threshold triggers selection mode
+- **Multi-region dark overlay**: Covers screen except selection area
+- **Bright border**: 2px cyan border for high visibility over any content
+- **Real-time updates**: Selection rectangle updates with mouse movement
+- **Content preservation**: Selection area shows actual frozen screen content
 
 **Enhanced Data Structures:**
 ```python
@@ -426,6 +442,11 @@ class CapturedWindow:
     image: Image.Image      # PIL Image of pure content
     qpixmap: QPixmap       # Cached for rendering
     geometry: QRect        # Position at capture time
+
+# Selection rectangle state (Block 4.7)
+self.is_dragging: bool = False
+self.current_drag_pos: tuple = (0, 0)
+self.selection_rect: Optional[QRect] = None
 ```
 
 ### Testing Results:
@@ -434,6 +455,9 @@ class CapturedWindow:
 - ✅ **Performance**: Smooth interactions with pre-captured content system
 - ✅ **Visual feedback**: Real-time content preview during window highlighting
 - ✅ **Resource efficiency**: Proper cleanup with no memory leaks or hanging processes
+- ✅ **Selection rectangle drawing** (Block 4.7): Successfully implemented drag selection with clear areas
+- ✅ **Area capture functionality**: Tested 446x579 and 892x316 pixel selections working correctly
+- ✅ **Border visibility**: Bright cyan border visible over any content type
 
 ### Code Quality:
 - Clean PyQt6 integration with comprehensive error handling
@@ -447,15 +471,16 @@ class CapturedWindow:
 - **Planned enhancement**: Block 4.12 post-processing for background standardization
 
 ### Foundation for Future Phases:
-- **Selection rectangle drawing** (Blocks 4.7-4.11): Framework ready for area selection UI
+- **Magnifier widget framework** (Block 4.8): PyQt6 overlay system ready for additional widgets
+- **Enhanced selection system** (Blocks 4.9-4.11): Rectangle drawing foundation prepared for magnifier integration
 - **Global hotkey system** (Phase 5): CLI integration prepared for daemon spawning
-- **Video recording** (Phase 6): Window detection system ready for recording area selection
+- **Video recording** (Phase 6): Window detection and area selection systems ready for recording area selection
 
 ---
 
 **Phase 4 Progress Summary:**
-- ✅ **Blocks 4.1-4.6**: Core overlay, screen capture, dark layer, window highlighting, mouse events, and temporal consistency - ALL COMPLETED
-- 🔄 **Blocks 4.7-4.11**: Selection rectangle, magnifier widgets, dimensions display, and capture integration - READY FOR IMPLEMENTATION
+- ✅ **Blocks 4.1-4.7**: Core overlay, screen capture, dark layer, window highlighting, mouse events, temporal consistency, and selection rectangle drawing - ALL COMPLETED
+- 🔄 **Blocks 4.8-4.11**: Magnifier widgets, dimensions display, and capture integration - READY FOR IMPLEMENTATION
 - 📋 **Block 4.12**: Window background post-processing - PLANNED
 
 ---

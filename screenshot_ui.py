@@ -1,20 +1,27 @@
 #!/usr/bin/env python3
 """
-CaptiXfrom PIL import Image
-from utils.capture import ScreenCapture, list_visible_windows
-from utils.clipboard import copy_image_to_clipboardshot UI - Interactive overlay for screenshot selection
+CaptiX Screenshot UI - Interactive overlay for screenshot selection
 
-Phase 4, Block 4.5: Basic Mouse Event Handling
-- Detect mouse clicks on overlay
-- Distinguish between single clicks and drag starts
-- Handle highlighted window click vs desktop click
-- Add basic click position logging
+Phase 4, Block 4.7: Selection Rectangle Drawing - COMPLETED
+- Implement click-and-drag rectangle creation
+- Draw selection border (bright, 2px)
+- Clear dark overlay within selection area
+- Show actual screen content in selection
 
 Previous blocks completed:
 - Block 4.1: PyQt6 Setup & Basic Overlay
 - Block 4.2: Screen Capture & Frozen Background
 - Block 4.3: Dark Overlay Layer (Enhanced)
 - Block 4.4: Window Highlighting System
+- Block 4.5: Basic Mouse Event Handling
+- Block 4.6: Enhanced Temporal Consistency Capture System
+- Block 4.7: Selection Rectangle Drawing
+
+Next blocks:
+- Block 4.8: Basic Magnifier Widget
+- Block 4.9: Enhanced Magnifier Features
+- Block 4.10: Selection Dimensions Display
+- Block 4.11: Capture Integration & Polish
 """
 
 import sys
@@ -105,6 +112,11 @@ class ScreenshotOverlay(QWidget):
         self.click_threshold_ms: int = 200  # Max time for click vs drag (milliseconds)
         self.drag_threshold_px: int = 5  # Min pixel movement to start drag
 
+        # Selection rectangle state (Block 4.7)
+        self.is_dragging: bool = False
+        self.current_drag_pos: tuple = (0, 0)  # Current mouse position during drag
+        self.selection_rect: Optional[QRect] = None  # Current selection rectangle
+
         self.setup_window()
         self.capture_frozen_screen()
         self.setup_geometry()
@@ -188,8 +200,6 @@ class ScreenshotOverlay(QWidget):
             logger.info("Capturing all visible windows individually...")
 
             # Get list of all visible windows
-            from utils.capture import list_visible_windows
-
             visible_windows = list_visible_windows()
 
             captured_count = 0
@@ -422,6 +432,30 @@ class ScreenshotOverlay(QWidget):
             logger.error(f"Error updating window highlight: {e}")
             self.highlighted_window = None
 
+    def update_selection_rectangle(self):
+        """Update the selection rectangle based on current drag positions."""
+        if not self.is_dragging:
+            self.selection_rect = None
+            return
+
+        # Calculate rectangle from press position to current drag position
+        x1, y1 = self.press_position
+        x2, y2 = self.current_drag_pos
+
+        # Create rectangle with top-left and bottom-right coordinates
+        left = min(x1, x2)
+        top = min(y1, y2)
+        right = max(x1, x2)
+        bottom = max(y1, y2)
+
+        # Convert to global screen coordinates to QRect
+        self.selection_rect = QRect(left, top, right - left, bottom - top)
+
+        logger.debug(
+            f"Selection rectangle updated: {self.selection_rect.width()}x{self.selection_rect.height()} "
+            f"at ({self.selection_rect.x()}, {self.selection_rect.y()})"
+        )
+
     @pyqtProperty(float)
     def overlay_opacity(self) -> float:
         """Get the current overlay opacity (0.0 to 1.0)."""
@@ -447,15 +481,12 @@ class ScreenshotOverlay(QWidget):
             super().keyPressEvent(event)
 
     def mouseMoveEvent(self, event):
-        """Handle mouse move events for window highlighting."""
+        """Handle mouse move events for window highlighting and drag selection."""
         # Convert local coordinates to global screen coordinates
         global_pos = self.mapToGlobal(event.position().toPoint())
 
-        # Update window highlighting based on cursor position
-        self.update_window_highlight(global_pos.x(), global_pos.y())
-
         # Check if this might be the start of a drag operation
-        if self.mouse_pressed:
+        if self.mouse_pressed and not self.is_dragging:
             current_pos = (global_pos.x(), global_pos.y())
             distance_moved = abs(current_pos[0] - self.press_position[0]) + abs(
                 current_pos[1] - self.press_position[1]
@@ -463,9 +494,25 @@ class ScreenshotOverlay(QWidget):
 
             if distance_moved >= self.drag_threshold_px:
                 logger.info(
-                    f"Drag detected: moved {distance_moved}px from press position"
+                    f"Drag started: moved {distance_moved}px from press position"
                 )
-                # TODO: Will be implemented in Block 4.7 (Selection Rectangle Drawing)
+                self.is_dragging = True
+                # Clear window highlighting when dragging starts
+                self.highlighted_window = None
+
+        # Handle active dragging (Block 4.7)
+        if self.is_dragging:
+            current_pos = (global_pos.x(), global_pos.y())
+            self.current_drag_pos = current_pos
+
+            # Update selection rectangle
+            self.update_selection_rectangle()
+
+            # Trigger repaint to show selection rectangle
+            self.update()
+        else:
+            # Only update window highlighting when not dragging
+            self.update_window_highlight(global_pos.x(), global_pos.y())
 
         super().mouseMoveEvent(event)
 
@@ -510,6 +557,8 @@ class ScreenshotOverlay(QWidget):
 
             # Reset mouse state
             self.mouse_pressed = False
+            self.is_dragging = False
+            self.selection_rect = None
 
             logger.info(
                 f"Mouse released at {current_pos}, duration: {click_duration_ms:.1f}ms, moved: {distance_moved}px"
@@ -655,7 +704,7 @@ class ScreenshotOverlay(QWidget):
             self.close()
 
     def paintEvent(self, event: QPaintEvent):
-        """Paint the overlay with frozen screen background, dark overlay, and window highlight."""
+        """Paint the overlay with frozen screen background, dark overlay, selection rectangle, and window highlight."""
         painter = QPainter(self)
 
         # Draw the frozen screen background if available
@@ -670,22 +719,84 @@ class ScreenshotOverlay(QWidget):
             painter.fillRect(self.rect(), QColor(128, 128, 128, 50))
             logger.warning("No frozen screen available, using fallback background")
 
-        # Draw the dark overlay layer with animated opacity
-        # Convert opacity from 0.0-1.0 to 0-255 alpha value
+        # Draw the dark overlay layer with animated opacity, but not over selection area
         alpha_value = int(self._overlay_opacity * 255)
         dark_overlay_color = QColor(0, 0, 0, alpha_value)
-        painter.fillRect(self.rect(), dark_overlay_color)
+
+        if self.selection_rect and self.is_dragging:
+            # Draw dark overlay everywhere except selection area (Block 4.7)
+            screen_rect = self.rect()
+
+            # Create regions for areas outside selection
+            # Top area (above selection)
+            if self.selection_rect.top() > screen_rect.top():
+                top_rect = QRect(
+                    screen_rect.left(),
+                    screen_rect.top(),
+                    screen_rect.width(),
+                    self.selection_rect.top() - screen_rect.top(),
+                )
+                painter.fillRect(top_rect, dark_overlay_color)
+
+            # Bottom area (below selection)
+            if self.selection_rect.bottom() < screen_rect.bottom():
+                bottom_rect = QRect(
+                    screen_rect.left(),
+                    self.selection_rect.bottom(),
+                    screen_rect.width(),
+                    screen_rect.bottom() - self.selection_rect.bottom(),
+                )
+                painter.fillRect(bottom_rect, dark_overlay_color)
+
+            # Left area (left of selection)
+            if self.selection_rect.left() > screen_rect.left():
+                left_rect = QRect(
+                    screen_rect.left(),
+                    max(screen_rect.top(), self.selection_rect.top()),
+                    self.selection_rect.left() - screen_rect.left(),
+                    min(screen_rect.bottom(), self.selection_rect.bottom())
+                    - max(screen_rect.top(), self.selection_rect.top()),
+                )
+                painter.fillRect(left_rect, dark_overlay_color)
+
+            # Right area (right of selection)
+            if self.selection_rect.right() < screen_rect.right():
+                right_rect = QRect(
+                    self.selection_rect.right(),
+                    max(screen_rect.top(), self.selection_rect.top()),
+                    screen_rect.right() - self.selection_rect.right(),
+                    min(screen_rect.bottom(), self.selection_rect.bottom())
+                    - max(screen_rect.top(), self.selection_rect.top()),
+                )
+                painter.fillRect(right_rect, dark_overlay_color)
+
+            # Draw selection border (bright, 2px)
+            pen = painter.pen()
+            pen.setColor(QColor(0, 255, 255, 255))  # Bright cyan border
+            pen.setWidth(2)  # 2px border
+            pen.setStyle(Qt.PenStyle.SolidLine)
+            painter.setPen(pen)
+            painter.drawRect(self.selection_rect)
+
+            logger.debug(
+                f"Selection rectangle drawn: {self.selection_rect.width()}x{self.selection_rect.height()} "
+                f"at ({self.selection_rect.x()}, {self.selection_rect.y()})"
+            )
+        else:
+            # No selection - draw dark overlay over entire screen
+            painter.fillRect(self.rect(), dark_overlay_color)
 
         if alpha_value > 0:
             logger.debug(
                 f"Dark overlay layer drawn ({self._overlay_opacity:.1%} opacity, alpha={alpha_value})"
             )
 
-        # Draw window highlight if we have a highlighted window
+        # Draw window highlight if we have a highlighted window (only when not dragging)
         if (
             self.highlighted_window
             and not self.highlighted_window.is_root
             and alpha_value > 0
+            and not self.is_dragging
         ):
             self.draw_window_highlight(painter)
 
