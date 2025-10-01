@@ -867,15 +867,22 @@ class ScreenCapture:
 
         return self.window_detector.get_visible_windows()
 
-    def save_screenshot(self, image: Image.Image, directory: str = None, filename: str = None) -> Tuple[str, int]:
+    def save_screenshot(
+        self,
+        image: Image.Image,
+        directory: str = None,
+        filename: str = None,
+        capture_type: str = "full",
+    ) -> Tuple[str, int]:
         """
         Save screenshot to file with timestamp naming.
-        
+
         Args:
             image: PIL Image to save
             directory: Directory to save to (defaults to ~/Pictures/Screenshots)
             filename: Custom filename (defaults to timestamp format)
-            
+            capture_type: Type of capture for suffix ('win', 'full', 'area')
+
         Returns:
             Tuple of (filepath, file_size_bytes)
         """
@@ -888,8 +895,8 @@ class ScreenCapture:
         
         # Generate filename if not provided
         if filename is None:
-            timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-            filename = f"Screenshot_{timestamp}.png"
+            timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+            filename = f"sc_{timestamp}_{capture_type}.png"
         
         # Ensure .png extension
         if not filename.lower().endswith('.png'):
@@ -958,9 +965,15 @@ def capture_screenshot(
         
         if image is None:
             raise RuntimeError("Failed to capture screen")
-        
-        # Save the screenshot
-        filepath, file_size = capture.save_screenshot(image, save_path)
+
+        # Save the screenshot with appropriate type
+        if x is not None and y is not None and width is not None and height is not None:
+            capture_type = "area"
+        else:
+            capture_type = "full"
+        filepath, file_size = capture.save_screenshot(
+            image, save_path, capture_type=capture_type
+        )
 
         # Copy to clipboard if requested
         if copy_to_clipboard:
@@ -1008,7 +1021,9 @@ def capture_window_at_position(
             raise RuntimeError(f"Failed to capture window at position ({x}, {y})")
 
         # Save the screenshot
-        filepath, file_size = capture.save_screenshot(image, save_path)
+        filepath, file_size = capture.save_screenshot(
+            image, save_path, capture_type="win"
+        )
 
         # Copy to clipboard if requested
         if copy_to_clipboard:
@@ -1093,7 +1108,9 @@ def capture_window_at_position_pure(
             )
 
         # Save the screenshot
-        filepath, file_size = capture.save_screenshot(image, save_path)
+        filepath, file_size = capture.save_screenshot(
+            image, save_path, capture_type="win"
+        )
 
         # Copy to clipboard if requested
         if copy_to_clipboard:
@@ -1142,7 +1159,9 @@ def capture_window_pure_content_by_id(
             )
 
         # Save the screenshot
-        filepath, file_size = capture.save_screenshot(image, save_path)
+        filepath, file_size = capture.save_screenshot(
+            image, save_path, capture_type="win"
+        )
 
         # Copy to clipboard if requested
         if copy_to_clipboard:
@@ -1191,7 +1210,9 @@ if __name__ == "__main__":
                     if pure_image:
                         # Save test image
                         test_filepath, test_size = capture.save_screenshot(
-                            pure_image, filename="test_pure_window.png"
+                            pure_image,
+                            filename="test_pure_window.png",
+                            capture_type="win",
                         )
                         print(f"Pure window capture saved: {test_filepath}")
                         print(

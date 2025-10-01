@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """
-CaptiX Screenshot UI - Interactive overlay for screenshot selection
+CaptiXfrom PIL import Image
+from utils.capture import ScreenCapture, list_visible_windows
+from utils.clipboard import copy_image_to_clipboardshot UI - Interactive overlay for screenshot selection
 
 Phase 4, Block 4.5: Basic Mouse Event Handling
 - Detect mouse clicks on overlay
@@ -18,17 +20,54 @@ Previous blocks completed:
 import sys
 import logging
 import time
-from typing import Optional
+from typing import Optional, Dict
+from dataclasses import dataclass
 from PyQt6.QtWidgets import QApplication, QWidget
-from PyQt6.QtCore import Qt, QRect, QPropertyAnimation, QEasingCurve, pyqtProperty
-from PyQt6.QtGui import QKeyEvent, QPaintEvent, QPainter, QColor, QPixmap, QMouseEvent
+from PyQt6.QtCore import (
+    Qt,
+    QRect,
+    QPropertyAnimation,
+    QEasingCurve,
+    pyqtProperty,
+    QPoint,
+)
+from PyQt6.QtGui import (
+    QKeyEvent,
+    QPaintEvent,
+    QPainter,
+    QColor,
+    QPixmap,
+    QMouseEvent,
+    QImage,
+)
 from PIL import Image
-from utils.capture import ScreenCapture
+from utils.capture import ScreenCapture, list_visible_windows
+from utils.clipboard import copy_image_to_clipboard
 from utils.window_detect import WindowDetector, WindowInfo
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG)  # Enable debug logging
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class CapturedWindow:
+    """Stores a captured window with its metadata at capture time."""
+
+    window_info: WindowInfo
+    image: Image.Image  # PIL Image of just this window
+    qpixmap: Optional[QPixmap] = None  # Cached QPixmap for efficient rendering
+    geometry: QRect = None  # Position/size at capture time
+
+    def __post_init__(self):
+        """Initialize geometry from window_info."""
+        if self.geometry is None:
+            self.geometry = QRect(
+                self.window_info.x,
+                self.window_info.y,
+                self.window_info.width,
+                self.window_info.height,
+            )
 
 
 class ScreenshotOverlay(QWidget):
@@ -41,6 +80,14 @@ class ScreenshotOverlay(QWidget):
         self.window_detector: Optional[WindowDetector] = None
         self._overlay_opacity: float = 0.0  # Start with no opacity
         self.fade_animation: Optional[QPropertyAnimation] = None
+
+        # Enhanced capture system (Block 4.6a)
+        self.captured_windows: Dict[
+            int, CapturedWindow
+        ] = {}  # window_id -> captured content
+        self.frozen_full_image: Optional[Image.Image] = (
+            None  # PIL version for area cutting
+        )
 
         # Window highlighting state
         self.highlighted_window: Optional[WindowInfo] = None
@@ -88,9 +135,9 @@ class ScreenshotOverlay(QWidget):
         logger.info("Overlay window configured")
 
     def capture_frozen_screen(self):
-        """Capture the current screen state to use as frozen background."""
+        """Capture the current screen state and all individual windows to use as frozen background."""
         try:
-            logger.info("Capturing frozen screen background...")
+            logger.info("Capturing frozen screen background and all windows...")
 
             # Initialize capture system
             self.capture_system = ScreenCapture()
@@ -99,7 +146,10 @@ class ScreenshotOverlay(QWidget):
             screen_image = self.capture_system.capture_full_screen(include_cursor=True)
 
             if screen_image:
-                # Convert PIL Image to QPixmap
+                # Store the PIL version for area cutting
+                self.frozen_full_image = screen_image.copy()
+
+                # Convert PIL Image to QPixmap for background display
                 # First convert PIL image to RGB if it's in RGBA mode
                 if screen_image.mode == "RGBA":
                     # Create a white background and paste the image on it
@@ -117,18 +167,156 @@ class ScreenshotOverlay(QWidget):
 
                 # Create QPixmap from image data
                 # QImage format: RGB888 for 24-bit RGB
-                from PyQt6.QtGui import QImage
-
                 qimage = QImage(image_bytes, width, height, QImage.Format.Format_RGB888)
                 self.frozen_screen = QPixmap.fromImage(qimage)
 
                 logger.info(f"Frozen screen captured: {width}x{height}")
+
+                # Now capture all individual windows (Block 4.6a enhancement)
+                self.capture_all_windows()
             else:
                 logger.error("Failed to capture screen for frozen background")
 
         except Exception as e:
             logger.error(f"Error capturing frozen screen: {e}")
             self.frozen_screen = None
+            self.frozen_full_image = None
+
+    def capture_all_windows(self):
+        """Capture all visible windows individually for temporal consistency."""
+        try:
+            logger.info("Capturing all visible windows individually...")
+
+            # Get list of all visible windows
+            from utils.capture import list_visible_windows
+
+            visible_windows = list_visible_windows()
+
+            captured_count = 0
+            skipped_count = 0
+
+            for window_info in visible_windows:
+                try:
+                    # Skip root windows and very small windows (likely system windows)
+                    if window_info.is_root or (
+                        window_info.width < 50 and window_info.height < 50
+                    ):
+                        logger.debug(
+                            f"Skipping window: {window_info.title} ({window_info.width}x{window_info.height})"
+                        )
+                        skipped_count += 1
+                        continue
+
+                    # Capture this window's pure content without cursor
+                    window_image = self.capture_system.capture_window_pure_content(
+                        window_info.window_id, include_cursor=False
+                    )
+
+                    if window_image:
+                        # Store the captured window
+                        captured_window = CapturedWindow(
+                            window_info=window_info, image=window_image
+                        )
+
+                        self.captured_windows[window_info.window_id] = captured_window
+                        captured_count += 1
+
+                        logger.debug(
+                            f"Captured window: {window_info.title} ({window_info.class_name}) "
+                            f"{window_info.width}x{window_info.height}"
+                        )
+                    else:
+                        logger.debug(f"Failed to capture window: {window_info.title}")
+                        skipped_count += 1
+
+                except Exception as e:
+                    logger.warning(f"Error capturing window {window_info.title}: {e}")
+                    skipped_count += 1
+                    continue
+
+            logger.info(
+                f"Window capture complete: {captured_count} captured, {skipped_count} skipped"
+            )
+
+        except Exception as e:
+            logger.error(f"Error capturing windows: {e}")
+            # Continue with empty captured windows dict - overlay will still work with basic highlighting
+
+    def get_window_qpixmap(self, window_id: int) -> Optional[QPixmap]:
+        """Get or create QPixmap for a captured window for efficient rendering."""
+        if window_id not in self.captured_windows:
+            return None
+
+        captured_window = self.captured_windows[window_id]
+
+        # Return cached QPixmap if available
+        if captured_window.qpixmap is not None:
+            return captured_window.qpixmap
+
+        # Convert PIL image to QPixmap and cache it
+        try:
+            pil_image = captured_window.image
+
+            # Handle alpha channel properly to avoid white borders
+            if pil_image.mode == "RGBA":
+                # Instead of white background, use transparent background
+                # or convert more carefully to preserve the original look
+
+                # Option 1: Convert RGBA directly to QImage to preserve alpha
+                width, height = pil_image.size
+                image_bytes = pil_image.tobytes()
+                bytes_per_line = width * 4  # 4 bytes per pixel for RGBA
+
+                qimage = QImage(
+                    image_bytes,
+                    width,
+                    height,
+                    bytes_per_line,
+                    QImage.Format.Format_RGBA8888,
+                )
+                qpixmap = QPixmap.fromImage(qimage)
+
+            elif pil_image.mode != "RGB":
+                # Convert other modes to RGB
+                pil_image = pil_image.convert("RGB")
+                width, height = pil_image.size
+                image_bytes = pil_image.tobytes()
+                bytes_per_line = width * 3  # 3 bytes per pixel for RGB
+
+                qimage = QImage(
+                    image_bytes,
+                    width,
+                    height,
+                    bytes_per_line,
+                    QImage.Format.Format_RGB888,
+                )
+                qpixmap = QPixmap.fromImage(qimage)
+            else:
+                # Already RGB format
+                width, height = pil_image.size
+                image_bytes = pil_image.tobytes()
+                bytes_per_line = width * 3  # 3 bytes per pixel for RGB
+
+                qimage = QImage(
+                    image_bytes,
+                    width,
+                    height,
+                    bytes_per_line,
+                    QImage.Format.Format_RGB888,
+                )
+                qpixmap = QPixmap.fromImage(qimage)
+
+            # Cache the QPixmap for future use
+            captured_window.qpixmap = qpixmap
+
+            logger.debug(
+                f"Created QPixmap for window {window_id}: {width}x{height} ({pil_image.mode})"
+            )
+            return qpixmap
+
+        except Exception as e:
+            logger.warning(f"Failed to convert window {window_id} to QPixmap: {e}")
+            return None
 
     def setup_geometry(self):
         """Prepare window for fullscreen mode."""
@@ -328,67 +516,143 @@ class ScreenshotOverlay(QWidget):
             )
 
             # Determine click type and handle accordingly
+            # It's a click if EITHER duration is quick OR movement is minimal
             if (
                 click_duration_ms <= self.click_threshold_ms
-                and distance_moved < self.drag_threshold_px
+                or distance_moved < self.drag_threshold_px
             ):
-                # This is a single click
-                self.handle_single_click(self.press_position[0], self.press_position[1])
+                # This is a single click - convert position to QPoint
+                click_pos = QPoint(self.press_position[0], self.press_position[1])
+                self.handle_single_click(click_pos)
             else:
                 # This was a drag operation
                 self.handle_drag_complete(self.press_position, current_pos)
 
         super().mouseReleaseEvent(event)
 
-    def handle_single_click(self, x: int, y: int):
-        """Handle single click - capture window or full screen."""
-        logger.info(f"Processing single click at global position ({x}, {y})")
+    def handle_single_click(self, pos: QPoint):
+        """Handle single click for window or desktop capture using pre-captured content."""
+        try:
+            # Use the window that was detected during mouse press
+            if self.highlighted_window and not self.highlighted_window.is_root:
+                # Window was clicked - find the corresponding captured window
+                target_window_id = self.highlighted_window.window_id
 
-        # Use the window that was highlighted when the click started
-        target_window = self.highlighted_window
+                if target_window_id in self.captured_windows:
+                    captured_window = self.captured_windows[target_window_id]
+                    logger.info(
+                        f"Window click detected on: {captured_window.window_info.title}"
+                    )
 
-        if target_window and not target_window.is_root:
-            # Clicked on a window - capture that window
-            logger.info(
-                f"Single click on window: {target_window.title} ({target_window.class_name})"
-            )
-            logger.info(
-                f"  Window geometry: {target_window.width}x{target_window.height} at ({target_window.x}, {target_window.y})"
-            )
+                    if captured_window.image:
+                        # Use pre-captured window content and existing save infrastructure
+                        try:
+                            filepath, file_size = self.capture_system.save_screenshot(
+                                captured_window.image, capture_type="win"
+                            )
+                            # Copy to clipboard using existing infrastructure
+                            if copy_image_to_clipboard(filepath):
+                                logger.info(
+                                    f"Window capture completed: {captured_window.window_info.title} ({file_size} bytes)"
+                                )
+                            else:
+                                logger.warning(
+                                    "Failed to copy window capture to clipboard"
+                                )
+                        except Exception as e:
+                            logger.error(f"Failed to save window capture: {e}")
+                    else:
+                        logger.warning(
+                            f"No image available for window: {captured_window.window_info.title}"
+                        )
+                else:
+                    logger.warning(
+                        f"Clicked window (ID: {target_window_id}) not found in captured windows"
+                    )
+                    # Fall back to desktop capture
+                    self._capture_desktop()
+            else:
+                # No window clicked or desktop clicked - capture full desktop using frozen image
+                self._capture_desktop()
 
-            # TODO: Block 4.6 will implement actual window capture
-            # For now, just log the intended action
-            logger.info("Action: Would capture this specific window")
+            self.close()
 
+        except Exception as e:
+            logger.error(f"Error in handle_single_click: {e}")
+            self.close()
+
+    def _capture_desktop(self):
+        """Helper method to capture desktop using frozen image."""
+        logger.info("Desktop click detected - capturing full screen")
+        if self.frozen_full_image:
+            # Use pre-captured desktop content and existing save infrastructure
+            try:
+                filepath, file_size = self.capture_system.save_screenshot(
+                    self.frozen_full_image, capture_type="full"
+                )
+                # Copy to clipboard using existing infrastructure
+                if copy_image_to_clipboard(filepath):
+                    logger.info(f"Full desktop capture completed ({file_size} bytes)")
+                else:
+                    logger.warning("Failed to copy desktop capture to clipboard")
+            except Exception as e:
+                logger.error(f"Failed to save desktop capture: {e}")
         else:
-            # Clicked on desktop or no window detected - capture full screen
-            logger.info("Single click on desktop - will capture full screen")
-
-            # TODO: Block 4.6 will implement actual full screen capture
-            # For now, just log the intended action
-            logger.info("Action: Would capture full screen")
+            logger.error("No frozen desktop image available")
 
     def handle_drag_complete(self, start_pos: tuple, end_pos: tuple):
-        """Handle completed drag operation - capture selected area."""
-        x1, y1 = start_pos
-        x2, y2 = end_pos
+        """Handle completed drag selection for area capture using pre-captured content."""
+        try:
+            x1, y1 = start_pos
+            x2, y2 = end_pos
 
-        # Calculate selection rectangle
-        left = min(x1, x2)
-        top = min(y1, y2)
-        right = max(x1, x2)
-        bottom = max(y1, y2)
+            # Calculate selection rectangle
+            left = min(x1, x2)
+            top = min(y1, y2)
+            right = max(x1, x2)
+            bottom = max(y1, y2)
 
-        width = right - left
-        height = bottom - top
+            width = right - left
+            height = bottom - top
 
-        logger.info(
-            f"Drag completed: selection area {width}x{height} at ({left}, {top})"
-        )
+            # Validate selection area
+            if width <= 0 or height <= 0:
+                logger.warning("Invalid selection area - no capture performed")
+                self.close()
+                return
 
-        # TODO: Block 4.7+ will implement actual area selection capture
-        # For now, just log the intended action
-        logger.info(f"Action: Would capture area {left},{top} {width}x{height}")
+            logger.info(
+                f"Area selection: ({left}, {top}) to ({right}, {bottom}) - {width}x{height}"
+            )
+
+            # Use pre-captured desktop content for cropping
+            if self.frozen_full_image:
+                # Crop the selected area from frozen image
+                try:
+                    cropped_image = self.frozen_full_image.crop(
+                        (left, top, right, bottom)
+                    )
+                    # Use existing save infrastructure
+                    filepath, file_size = self.capture_system.save_screenshot(
+                        cropped_image, capture_type="area"
+                    )
+                    # Copy to clipboard using existing infrastructure
+                    if copy_image_to_clipboard(filepath):
+                        logger.info(
+                            f"Area capture completed: {width}x{height} pixels ({file_size} bytes)"
+                        )
+                    else:
+                        logger.warning("Failed to copy area capture to clipboard")
+                except Exception as e:
+                    logger.error(f"Failed to process area capture: {e}")
+            else:
+                logger.error("No frozen desktop image available for area capture")
+
+            self.close()
+
+        except Exception as e:
+            logger.error(f"Error in handle_drag_complete: {e}")
+            self.close()
 
     def paintEvent(self, event: QPaintEvent):
         """Paint the overlay with frozen screen background, dark overlay, and window highlight."""
@@ -426,39 +690,104 @@ class ScreenshotOverlay(QWidget):
             self.draw_window_highlight(painter)
 
     def draw_window_highlight(self, painter: QPainter):
-        """Draw highlight overlay over the currently highlighted window."""
+        """Draw highlight overlay over the currently highlighted window - Block 4.6b Enhanced."""
         window = self.highlighted_window
         if not window:
             return
 
-        # Create window rectangle
-        window_rect = QRect(window.x, window.y, window.width, window.height)
+        # Create original window rectangle (full window bounds)
+        original_window_rect = QRect(window.x, window.y, window.width, window.height)
 
-        # Ensure window rectangle is within screen bounds
+        # Calculate visible portion within screen bounds
         screen_rect = self.rect()
-        window_rect = window_rect.intersected(screen_rect)
+        visible_window_rect = original_window_rect.intersected(screen_rect)
 
-        if window_rect.isEmpty():
+        if visible_window_rect.isEmpty():
             return
 
-        # Draw light gray-white highlight over the window area
-        # Use a light color that's visible over the dark overlay
-        highlight_color = QColor(
-            200, 200, 200, 60
-        )  # Light gray-white with 60/255 alpha (~24%)
-        painter.fillRect(window_rect, highlight_color)
+        # Block 4.6b: Try to show actual captured window content instead of gray overlay
+        window_pixmap = self.get_window_qpixmap(window.window_id)
 
-        # Draw a subtle border around the highlighted window
-        border_color = QColor(
-            255, 255, 255, 120
-        )  # Brighter white border with more alpha
-        painter.setPen(border_color)
-        painter.drawRect(window_rect)
+        if window_pixmap:
+            # Calculate which part of the captured image to show
+            # This prevents squishing when window is partially off-screen
 
-        logger.debug(
-            f"Window highlight drawn: {window_rect.width()}x{window_rect.height()} "
-            f"at ({window_rect.x()}, {window_rect.y()})"
-        )
+            # Calculate offset from window origin to visible area
+            offset_x = visible_window_rect.x() - original_window_rect.x()
+            offset_y = visible_window_rect.y() - original_window_rect.y()
+
+            # Create source rectangle (portion of captured image to display)
+            source_rect = QRect(
+                offset_x,
+                offset_y,
+                visible_window_rect.width(),
+                visible_window_rect.height(),
+            )
+
+            # Ensure source rectangle is within pixmap bounds
+            source_rect = source_rect.intersected(window_pixmap.rect())
+
+            if not source_rect.isEmpty():
+                # Draw only the visible portion - no squishing
+                painter.drawPixmap(visible_window_rect, window_pixmap, source_rect)
+
+            # Add consistent border that stands out from window content
+            pen = painter.pen()
+            pen.setColor(QColor(0, 150, 255, 200))  # Blue border that stands out better
+            pen.setWidth(2)  # 2 pixel width for better visibility over any content
+            pen.setStyle(Qt.PenStyle.SolidLine)  # Ensure solid line
+            painter.setPen(pen)
+            painter.drawRect(visible_window_rect)
+
+            # Debug for terminal window
+            if (
+                "terminal" in window.class_name.lower()
+                or "gnome-terminal" in window.class_name.lower()
+            ):
+                logger.info(f"Terminal window debug: {window.title}")
+                logger.info(f"  Window size: {window.width}x{window.height}")
+                logger.info(
+                    f"  Pixmap size: {window_pixmap.width()}x{window_pixmap.height()}"
+                )
+                logger.info(
+                    f"  Visible rect: {visible_window_rect.width()}x{visible_window_rect.height()}"
+                )
+                logger.info(
+                    f"  Source rect: {source_rect.width()}x{source_rect.height()}"
+                )
+                # Check if we have the original image mode info
+                if window.window_id in self.captured_windows:
+                    original_mode = self.captured_windows[window.window_id].image.mode
+                    logger.info(f"  Original image mode: {original_mode}")
+                    logger.info(
+                        f"  Image size: {self.captured_windows[window.window_id].image.size}"
+                    )
+                else:
+                    logger.info("  No captured window data found")
+
+            logger.debug(
+                f"Window content preview drawn: {visible_window_rect.width()}x{visible_window_rect.height()} "
+                f"at ({visible_window_rect.x()}, {visible_window_rect.y()}) - {window.title}"
+            )
+        else:
+            # Fallback to gray highlight if no captured content available
+            highlight_color = QColor(
+                200, 200, 200, 60
+            )  # Light gray-white with 60/255 alpha (~24%)
+            painter.fillRect(visible_window_rect, highlight_color)
+
+            # Draw a consistent border
+            pen = painter.pen()
+            pen.setColor(QColor(0, 150, 255, 200))  # Same blue border
+            pen.setWidth(2)  # Same 2 pixel width
+            pen.setStyle(Qt.PenStyle.SolidLine)  # Ensure solid line
+            painter.setPen(pen)
+            painter.drawRect(visible_window_rect)
+
+            logger.debug(
+                f"Window highlight drawn (fallback): {visible_window_rect.width()}x{visible_window_rect.height()} "
+                f"at ({visible_window_rect.x()}, {visible_window_rect.y()})"
+            )
 
     def showEvent(self, event):
         """Handle window show event."""
@@ -497,6 +826,10 @@ class ScreenshotOverlay(QWidget):
 
         # Clean up frozen screen pixmap
         self.frozen_screen = None
+
+        # Clean up enhanced capture data (Block 4.6a)
+        self.frozen_full_image = None
+        self.captured_windows.clear()
 
         # Clear highlighting state
         self.highlighted_window = None

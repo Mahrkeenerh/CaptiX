@@ -69,222 +69,6 @@ This log tracks the implementation progress of CaptiX through all development ph
 - Proper resource cleanup for X11 connections
 - PEP 8 compliant code structure
 
-#### Block 4.4: Window Highlighting System ✅ COMPLETED
-
-#### Implemented Features:
-
-##### 1. X11 Stack Walking Window Detection
-- ✅ Implemented `get_window_at_position_excluding()` method with X11 window stack traversal
-- ✅ Proper Z-order window detection (top to bottom) excluding overlay window
-- ✅ Fixed coordinate calculation using hierarchy walking instead of `translate_coords()`
-- ✅ Resolves negative coordinate issues with decorated windows
-
-##### 2. Real-time Window Highlighting
-- ✅ Mouse move event handling with cursor position tracking
-- ✅ Real-time window detection as cursor moves between windows
-- ✅ Gray-white highlight overlay (60/255 alpha) over detected windows
-- ✅ Clear highlight when cursor moves to desktop areas
-- ✅ Optimized detection frequency (10-pixel movement threshold)
-
-##### 3. Visual Feedback System
-- ✅ Light gray-white highlight overlay with subtle white border
-- ✅ Window highlight properly positioned and sized to match detected windows
-- ✅ Smooth highlight updates as cursor moves between different windows
-- ✅ No highlighting when cursor is over desktop/root window
-
-##### 4. Technical Integration
-- ✅ Enhanced mouse tracking with `setMouseTracking(True)`
-- ✅ Global to local coordinate conversion for accurate positioning
-- ✅ Integration with existing window detection system
-- ✅ Proper overlay window ID exclusion from detection
-
-### Technical Implementation:
-
-**X11 Stack Walking Solution:**
-```python
-def get_window_at_position_excluding(self, x: int, y: int, exclude_window_id: Optional[int] = None)
-def _get_window_stack(self) -> list  # Z-order window traversal
-def _window_contains_point(self, window, x: int, y: int) -> bool  # Fixed coordinate calculation
-```
-
-**Coordinate System Fix:**
-- **Problem**: `translate_coords()` returns negative coordinates for decorated windows
-- **Solution**: Use existing `_get_absolute_coordinates()` method with hierarchy walking
-- **Result**: Accurate window position detection for all window types
-
-**Window Highlighting Rendering:**
-```python
-highlight_color = QColor(200, 200, 200, 60)  # Light gray-white 24% opacity
-border_color = QColor(255, 255, 255, 120)   # White border 47% opacity
-```
-
-### Testing Results:
-- ✅ **Multi-window detection**: VS Code, Nemo, Brave browser all properly highlighted
-- ✅ **Accurate positioning**: Window highlights match exact window boundaries
-- ✅ **Desktop detection**: No highlight when cursor over desktop areas
-- ✅ **Smooth transitions**: Highlight updates seamlessly as cursor moves
-- ✅ **Performance**: Optimized with 10-pixel movement threshold, no lag
-- ✅ **Coordinate accuracy**: Fixed negative coordinate issues completely
-
-### Code Quality:
-- Clean integration with existing window detection architecture
-- Proper error handling for invalid/unmapped windows
-- Efficient Z-order traversal with early termination
-- Debug logging for troubleshooting window detection
-- Resource-conscious with movement threshold optimization
-
-### Foundation for Next Blocks:
-- **Window detection ready for clicks** - Block 4.5 can use same detection system
-- **Accurate positioning proven** - Coordinates reliable for window capture
-- **Visual feedback working** - Users can see exactly which window will be captured
-- **Performance optimized** - System ready for interactive selection drawing
-
-**Major Achievement**: Successfully solved overlay window interference with X11 window detection using stack walking approach while maintaining perfect coordinate accuracy and visual feedback.
-
----
-
-#### Block 4.5: Basic Mouse Event Handling - READY FOR IMPLEMENTATION
-
-### Goals:
-- Detect mouse clicks on overlay
-#### Block 4.5: Basic Mouse Event Handling ✅ COMPLETED
-
-#### Implemented Features:
-
-##### 1. Mouse Click Detection System
-- ✅ Implemented `mousePressEvent()` and `mouseReleaseEvent()` methods
-- ✅ Click duration tracking with millisecond precision
-- ✅ Mouse movement distance calculation during click/drag
-- ✅ Global coordinate conversion for accurate position logging
-
-##### 2. Click Type Classification
-- ✅ **Single Click Detection**: Duration ≤ 200ms + movement < 5px
-- ✅ **Drag Operation Detection**: Movement ≥ 5px triggers drag mode
-- ✅ **Window vs Desktop Click**: Uses existing window highlighting system
-- ✅ **Real-time Drag Feedback**: Logs drag detection during mouse movement
-
-##### 3. Action Classification Logic
-- ✅ **Click on highlighted window** → Window capture mode preparation
-- ✅ **Click on desktop/root window** → Full screen capture mode preparation  
-- ✅ **Drag operation** → Selection rectangle mode preparation
-- ✅ **Edge case handling** → No window detected defaults to desktop mode
-
-##### 4. Integration with Window Detection
-- ✅ Uses existing `highlighted_window` state from Block 4.4
-- ✅ Accesses window geometry (position, size, title, class name)
-- ✅ Proper window ID and root window detection
-- ✅ Maintains coordinate accuracy with global position mapping
-
-### Technical Implementation:
-
-**Mouse State Tracking:**
-```python
-# Mouse click tracking state variables
-self.mouse_pressed: bool = False
-self.press_start_time: float = 0.0
-self.press_position: tuple = (0, 0)  # Global coordinates
-self.click_threshold_ms: int = 200   # Max time for click vs drag
-self.drag_threshold_px: int = 5      # Min pixel movement to start drag
-```
-
-**Click Classification Algorithm:**
-```python
-def mouseReleaseEvent(self, event: QMouseEvent):
-    click_duration_ms = (time.time() - self.press_start_time) * 1000
-    distance_moved = manhattan_distance(press_position, current_position)
-    
-    if (click_duration_ms <= 200 and distance_moved < 5):
-        self.handle_single_click()  # Window or full screen capture
-    else:
-        self.handle_drag_complete() # Area selection capture
-```
-
-**Action Routing System:**
-```python
-def handle_single_click(self, x: int, y: int):
-    if target_window and not target_window.is_root:
-        # Window capture: geometry available for Block 4.6
-        logger.info(f"Window: {geometry.width}x{geometry.height} at ({geometry.x}, {geometry.y})")
-    else:
-        # Full screen capture: ready for Block 4.6
-        logger.info("Action: Would capture full screen")
-```
-
-### Testing Results:
-- ✅ **Single Click on Window**: Correctly detects VS Code, Brave browser windows
-- ✅ **Single Click on Desktop**: Properly identifies root window clicks
-- ✅ **Drag Detection**: Real-time movement tracking with 5px threshold
-- ✅ **Coordinate Accuracy**: Global positions calculated correctly
-- ✅ **Performance**: No lag during mouse tracking and click detection
-- ✅ **Edge Cases**: Handles window transitions during drag operations
-
-**Example Test Log:**
-```
-INFO: Mouse pressed at global position: (1048, 348)
-INFO: Mouse pressed on window: Untitled (Code)
-INFO: Mouse released at (1048, 348), duration: 119.7ms, moved: 0px
-INFO: Single click on window: Untitled (Code)
-INFO: Window geometry: 1920x858 at (0, 32)
-INFO: Action: Would capture this specific window
-```
-
-**Drag Operation Log:**
-```
-INFO: Drag detected: moved 19px from press position
-INFO: Drag completed: selection area 595x343 at (315, 155)
-INFO: Action: Would capture area 315,155 595x343
-```
-
-### Code Quality:
-- Clean integration with existing window highlighting system (Block 4.4)
-- Comprehensive logging for debugging and user feedback
-- Proper state management for mouse press/release cycles
-- Efficient coordinate conversion using PyQt6 `mapToGlobal()`
-- Robust edge case handling for window detection failures
-
-### Foundation for Next Blocks:
-- **Block 4.6 ready**: Click classification provides exact capture requirements
-- **Window capture data**: Complete window geometry available for capture system
-- **Desktop capture trigger**: Full screen mode detection working
-- **Area selection foundation**: Drag start/end coordinates calculated for rectangle drawing
-- **User feedback system**: Logging framework ready for capture notifications
-
-**Major Achievement**: Successfully implemented comprehensive mouse event handling that bridges window detection (Block 4.4) with future capture integration (Block 4.6), providing seamless click-to-action workflow with professional-grade precision and feedback.
-
----
-
-#### Block 4.6: Window Detection Integration - READY FOR IMPLEMENTATION
-
-### Goals:
-- Connect overlay clicks to existing window detection system
-- Implement click-on-highlighted-window capture using existing capture system
-- Implement click-on-desktop full-screen capture
-- Test both capture modes work from overlay
-
-### Tasks:
-1. **Capture System Integration**
-   - Import and use existing `ScreenCapture` class from `utils.capture`
-   - Integrate existing `WindowDetector` for precise window capture
-   - Connect Block 4.5 click classification to actual capture execution
-
-2. **Window Capture Implementation**
-   - Use `capture_window_content()` method for highlighted window capture
-   - Apply window geometry from Block 4.4 detection system
-   - Handle window capture with existing clipboard integration
-
-3. **Full Screen Capture Implementation**  
-   - Use `capture_full_screen()` method for desktop clicks
-   - Maintain cursor capture and existing file/clipboard workflow
-   - Apply existing timestamp naming convention
-
-4. **Integration Testing**
-   - Test window capture from overlay clicks
-   - Test full screen capture from desktop clicks
-   - Verify file saving and clipboard integration working
-   - Confirm overlay closes after successful capture
-
----
-
 ---
 
 ## Phase 2: Clipboard Integration ✅ COMPLETED
@@ -834,6 +618,326 @@ def paintEvent(self, event: QPaintEvent):
 - **Block 4.5:** Animation system proven ready for selection rectangle transitions
 - **Block 4.6:** Smooth transitions framework established for future UI elements
 - **Professional polish:** Animation system ready for magnifier and selection tools
+
+### Block 4.4: Window Highlighting System ✅ COMPLETED
+
+#### Implemented Features:
+
+##### 1. X11 Stack Walking Window Detection
+- ✅ Implemented `get_window_at_position_excluding()` method with X11 window stack traversal
+- ✅ Proper Z-order window detection (top to bottom) excluding overlay window
+- ✅ Fixed coordinate calculation using hierarchy walking instead of `translate_coords()`
+- ✅ Resolves negative coordinate issues with decorated windows
+
+##### 2. Real-time Window Highlighting
+- ✅ Mouse move event handling with cursor position tracking
+- ✅ Real-time window detection as cursor moves between windows
+- ✅ Gray-white highlight overlay (60/255 alpha) over detected windows
+- ✅ Clear highlight when cursor moves to desktop areas
+- ✅ Optimized detection frequency (10-pixel movement threshold)
+
+##### 3. Visual Feedback System
+- ✅ Light gray-white highlight overlay with subtle white border
+- ✅ Window highlight properly positioned and sized to match detected windows
+- ✅ Smooth highlight updates as cursor moves between different windows
+- ✅ No highlighting when cursor is over desktop/root window
+
+##### 4. Technical Integration
+- ✅ Enhanced mouse tracking with `setMouseTracking(True)`
+- ✅ Global to local coordinate conversion for accurate positioning
+- ✅ Integration with existing window detection system
+- ✅ Proper overlay window ID exclusion from detection
+
+### Technical Implementation:
+
+**X11 Stack Walking Solution:**
+```python
+def get_window_at_position_excluding(self, x: int, y: int, exclude_window_id: Optional[int] = None)
+def _get_window_stack(self) -> list  # Z-order window traversal
+def _window_contains_point(self, window, x: int, y: int) -> bool  # Fixed coordinate calculation
+```
+
+**Coordinate System Fix:**
+- **Problem**: `translate_coords()` returns negative coordinates for decorated windows
+- **Solution**: Use existing `_get_absolute_coordinates()` method with hierarchy walking
+- **Result**: Accurate window position detection for all window types
+
+**Window Highlighting Rendering:**
+```python
+highlight_color = QColor(200, 200, 200, 60)  # Light gray-white 24% opacity
+border_color = QColor(255, 255, 255, 120)   # White border 47% opacity
+```
+
+### Testing Results:
+- ✅ **Multi-window detection**: VS Code, Nemo, Brave browser all properly highlighted
+- ✅ **Accurate positioning**: Window highlights match exact window boundaries
+- ✅ **Desktop detection**: No highlight when cursor over desktop areas
+- ✅ **Smooth transitions**: Highlight updates seamlessly as cursor moves
+- ✅ **Performance**: Optimized with 10-pixel movement threshold, no lag
+- ✅ **Coordinate accuracy**: Fixed negative coordinate issues completely
+
+### Code Quality:
+- Clean integration with existing window detection architecture
+- Proper error handling for invalid/unmapped windows
+- Efficient Z-order traversal with early termination
+- Debug logging for troubleshooting window detection
+- Resource-conscious with movement threshold optimization
+
+### Foundation for Next Blocks:
+- **Window detection ready for clicks** - Block 4.5 can use same detection system
+- **Accurate positioning proven** - Coordinates reliable for window capture
+- **Visual feedback working** - Users can see exactly which window will be captured
+- **Performance optimized** - System ready for interactive selection drawing
+
+**Major Achievement**: Successfully solved overlay window interference with X11 window detection using stack walking approach while maintaining perfect coordinate accuracy and visual feedback.
+
+### Block 4.5: Basic Mouse Event Handling ✅ COMPLETED
+
+#### Implemented Features:
+
+##### 1. Mouse Click Detection System
+- ✅ Implemented `mousePressEvent()` and `mouseReleaseEvent()` methods
+- ✅ Click duration tracking with millisecond precision
+- ✅ Mouse movement distance calculation during click/drag
+- ✅ Global coordinate conversion for accurate position logging
+
+##### 2. Click Type Classification
+- ✅ **Single Click Detection**: Duration ≤ 200ms + movement < 5px
+- ✅ **Drag Operation Detection**: Movement ≥ 5px triggers drag mode
+- ✅ **Window vs Desktop Click**: Uses existing window highlighting system
+- ✅ **Real-time Drag Feedback**: Logs drag detection during mouse movement
+
+##### 3. Action Classification Logic
+- ✅ **Click on highlighted window** → Window capture mode preparation
+- ✅ **Click on desktop/root window** → Full screen capture mode preparation  
+- ✅ **Drag operation** → Selection rectangle mode preparation
+- ✅ **Edge case handling** → No window detected defaults to desktop mode
+
+##### 4. Integration with Window Detection
+- ✅ Uses existing `highlighted_window` state from Block 4.4
+- ✅ Accesses window geometry (position, size, title, class name)
+- ✅ Proper window ID and root window detection
+- ✅ Maintains coordinate accuracy with global position mapping
+
+### Technical Implementation:
+
+**Mouse State Tracking:**
+```python
+# Mouse click tracking state variables
+self.mouse_pressed: bool = False
+self.press_start_time: float = 0.0
+self.press_position: tuple = (0, 0)  # Global coordinates
+self.click_threshold_ms: int = 200   # Max time for click vs drag
+self.drag_threshold_px: int = 5      # Min pixel movement to start drag
+```
+
+**Click Classification Algorithm:**
+```python
+def mouseReleaseEvent(self, event: QMouseEvent):
+    click_duration_ms = (time.time() - self.press_start_time) * 1000
+    distance_moved = manhattan_distance(press_position, current_position)
+    
+    if (click_duration_ms <= 200 and distance_moved < 5):
+        self.handle_single_click()  # Window or full screen capture
+    else:
+        self.handle_drag_complete() # Area selection capture
+```
+
+**Action Routing System:**
+```python
+def handle_single_click(self, x: int, y: int):
+    if target_window and not target_window.is_root:
+        # Window capture: geometry available for Block 4.6
+        logger.info(f"Window: {geometry.width}x{geometry.height} at ({geometry.x}, {geometry.y})")
+    else:
+        # Full screen capture: ready for Block 4.6
+        logger.info("Action: Would capture full screen")
+```
+
+### Testing Results:
+- ✅ **Single Click on Window**: Correctly detects VS Code, Brave browser windows
+- ✅ **Single Click on Desktop**: Properly identifies root window clicks
+- ✅ **Drag Detection**: Real-time movement tracking with 5px threshold
+- ✅ **Coordinate Accuracy**: Global positions calculated correctly
+- ✅ **Performance**: No lag during mouse tracking and click detection
+- ✅ **Edge Cases**: Handles window transitions during drag operations
+
+**Example Test Log:**
+```
+INFO: Mouse pressed at global position: (1048, 348)
+INFO: Mouse pressed on window: Untitled (Code)
+INFO: Mouse released at (1048, 348), duration: 119.7ms, moved: 0px
+INFO: Single click on window: Untitled (Code)
+INFO: Window geometry: 1920x858 at (0, 32)
+INFO: Action: Would capture this specific window
+```
+
+**Drag Operation Log:**
+```
+INFO: Drag detected: moved 19px from press position
+INFO: Drag completed: selection area 595x343 at (315, 155)
+INFO: Action: Would capture area 315,155 595x343
+```
+
+### Code Quality:
+- Clean integration with existing window highlighting system (Block 4.4)
+- Comprehensive logging for debugging and user feedback
+- Proper state management for mouse press/release cycles
+- Efficient coordinate conversion using PyQt6 `mapToGlobal()`
+- Robust edge case handling for window detection failures
+
+### Foundation for Next Blocks:
+- **Block 4.6 ready**: Click classification provides exact capture requirements
+- **Window capture data**: Complete window geometry available for capture system
+- **Desktop capture trigger**: Full screen mode detection working
+- **Area selection foundation**: Drag start/end coordinates calculated for rectangle drawing
+- **User feedback system**: Logging framework ready for capture notifications
+
+**Major Achievement**: Successfully implemented comprehensive mouse event handling that bridges window detection (Block 4.4) with future capture integration (Block 4.6), providing seamless click-to-action workflow with professional-grade precision and feedback.
+
+### Block 4.6: Enhanced Temporal Consistency Capture System ✅ COMPLETED
+
+**Date:** October 1, 2025  
+
+### Implemented Features:
+
+#### Block 4.6a: Enhanced Screen State Capture
+- ✅ **Pre-capture all content at overlay startup**: Captures frozen full desktop image and all individual windows using XComposite 
+- ✅ **Temporal consistency architecture**: All content frozen at the exact moment overlay appears
+- ✅ **Window content storage**: Each window's pure content (no overlaps) stored in `CapturedWindow` dataclass
+- ✅ **Memory-efficient caching**: Pre-captured content stored for instant access during user interactions
+
+#### Block 4.6b: Enhanced Window Highlighting with Content Preview  
+- ✅ **Real-time content preview**: Shows actual captured window content while hovering instead of gray overlay
+- ✅ **Alpha channel handling**: Proper RGBA processing to avoid white borders on terminal windows
+- ✅ **Visual consistency**: Blue distinctive borders (2px) for clear window identification
+- ✅ **Performance optimization**: QPixmap caching for smooth real-time preview updates
+- ✅ **Cursor exclusion**: Window captures exclude cursor for clean professional screenshots
+
+#### Block 4.6c: Serve Pre-captured Content
+- ✅ **Window capture using highlighted_window**: Uses window detected during mouse press for accurate targeting
+- ✅ **Desktop capture from frozen image**: Full screen captures use pre-captured frozen desktop
+- ✅ **Area capture via crop**: Area selections crop from frozen desktop image for perfect consistency
+- ✅ **Enhanced click detection**: Click if EITHER duration ≤ 200ms OR movement < 5px (user-friendly)
+- ✅ **Proper window targeting**: Fixed geometry-based selection to use actual highlighted window from mouse events
+
+### File Naming Convention Updates:
+- ✅ **New format**: `sc_YYYY-MM-DD_HHMMSS_<suffix>.png`
+- ✅ **Capture type suffixes**: `_win` (window), `_full` (desktop), `_area` (selection)
+- ✅ **Time format optimization**: Removed separators from time (HHMMSS) while keeping date separators
+- ✅ **Consistent across codebase**: Updated all capture functions in `utils/capture.py` and `screenshot_ui.py`
+
+### Technical Implementation:
+
+**Enhanced Data Structures:**
+```python
+@dataclass
+class CapturedWindow:
+    window_info: WindowInfo      # Window metadata
+    image: Image.Image          # PIL Image of pure window content
+    qpixmap: QPixmap           # Cached QPixmap for rendering
+    geometry: QRect            # Position/size at capture time
+```
+
+**Temporal Consistency Architecture:**
+```python
+# Enhanced capture system (Block 4.6a)
+self.captured_windows: Dict[int, CapturedWindow] = {}  # window_id -> captured content
+self.frozen_full_image: Optional[Image.Image] = None  # PIL version for area cutting
+
+def capture_all_windows(self):
+    """Capture all visible windows individually for temporal consistency."""
+    # Uses pure window capture without cursor for each visible window
+    # Stores in captured_windows dict for instant access
+    
+def draw_window_highlight(self, painter: QPainter):
+    """Block 4.6b Enhanced - Show actual window content instead of gray overlay"""
+    # Displays pre-captured window content with blue border
+    # Falls back to gray highlight if no captured content available
+```
+
+**Content Serving System:**
+- **Startup Phase**: `capture_frozen_screen()` + `capture_all_windows()` 
+- **Runtime Phase**: All user interactions serve pre-captured content
+- **No Real-time Capture**: Eliminates timing issues and window state changes
+
+### Quality Improvements:
+- ✅ **Accurate window targeting**: Uses `self.highlighted_window` from mouse press detection
+- ✅ **Fallback handling**: Window not found in captures falls back to desktop capture  
+- ✅ **Error resilience**: Comprehensive exception handling with graceful degradation
+- ✅ **User experience**: Improved click logic for more intuitive interaction
+
+### Known Issues & Future Work:
+- ⚠️ **Inconsistent window backgrounds**: Terminal windows show transparent backgrounds, file browsers show black borders
+- 📋 **Root cause**: Different window types handle transparency/decoration differently during XComposite capture
+- 🔧 **Planned solution**: Block 4.12 post-processing to standardize backgrounds and crop borders
+
+### Testing Results:
+- ✅ **Window capture**: Different windows produce different file sizes confirming correct targeting
+- ✅ **Desktop capture**: Consistent ~426KB full screen captures  
+- ✅ **Area capture**: Proper cropping with appropriate file sizes (e.g., 567x369px = 47KB)
+- ✅ **Naming convention**: All three capture types use correct suffixes and format
+- ✅ **Clipboard integration**: All capture types successfully copy to clipboard
+- ✅ **Content preview**: Real-time window content display during highlighting
+- ✅ **Performance**: Smooth interactions with pre-captured content system
+
+**Major Achievement**: Successfully implemented a complete temporal consistency system that eliminates all timing-related screenshot issues while providing real-time content preview and professional-grade capture accuracy.
+
+### Block 4.12: Window Background Post-Processing - PLANNED
+
+### Goals:
+- Standardize window background handling across different window types
+- Remove inconsistent borders and backgrounds from captured windows  
+- Implement intelligent background detection and removal
+
+### Background Issues Documented:
+- **Terminal windows**: Show transparent/proper backgrounds during capture
+- **File browser windows**: Show black borders/backgrounds during capture
+- **Root cause**: Different window types handle transparency/decoration differently during XComposite capture
+
+### Implementation Strategy:
+- **Primary approach**: Achieve transparent backgrounds for all window types (like terminals)
+- **Fallback approach**: Intelligent border detection and removal post-processing
+- **Content preservation**: Maintain window content integrity while removing artifacts
+
+### Foundation for Future Development:
+- **Blocks 4.7-4.11**: Selection rectangle drawing, magnifier widgets, dimension display, and capture integration await implementation
+- **Post-processing pipeline**: Ready for integration with completed capture system
+- **Window background consistency**: Professional appearance across all captured windows
+
+---
+
+**Phase 4 Progress Summary:**
+- ✅ **Blocks 4.1-4.6**: Core overlay, screen capture, dark layer, window highlighting, mouse events, and temporal consistency - ALL COMPLETED
+- 🔄 **Blocks 4.7-4.11**: Selection rectangle, magnifier widgets, dimensions display, and capture integration - READY FOR IMPLEMENTATION
+- 📋 **Block 4.12**: Window background post-processing - PLANNED
+
+---
+
+## Phase 5: Global Hotkey System & Daemon - PLANNED
+
+---
+
+**Note:** Phase 4 continues with remaining blocks (4.4, 4.5, 4.7-4.11) as documented in IMPLEMENTATION_PHASES.md. Block 4.6 Enhanced Temporal Consistency Capture System has been completed and serves pre-captured content.
+
+---
+
+## Phase 4.7: Window Background Post-Processing - PLANNED
+
+### Goals:
+- Standardize window background handling across different window types
+- Remove inconsistent borders and backgrounds from captured windows  
+- Implement intelligent background detection and removal
+
+### Background Issues Documented:
+- **Terminal windows**: Show transparent/proper backgrounds during capture
+- **File browser windows**: Show black borders/backgrounds during capture
+- **Root cause**: Different window types handle transparency and decoration differently during XComposite capture
+
+### Implementation Strategy:
+- **Primary approach**: Achieve transparent backgrounds for all window types (like terminals)
+- **Fallback approach**: Intelligent border detection and removal post-processing
+- **Content preservation**: Maintain window content integrity while removing artifacts
 
 ---
 

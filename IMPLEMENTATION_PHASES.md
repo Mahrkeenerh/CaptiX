@@ -130,11 +130,18 @@ This document outlines the development phases for CaptiX, a fast screenshot and 
 - Handle highlighted window click vs desktop click
 - Add basic click position logging
 
-#### Block 4.6: Window Detection Integration
-- Connect overlay clicks to existing window detection
-- Implement click-on-highlighted-window capture
-- Implement click-on-desktop full-screen capture
-- Test both capture modes work from overlay
+#### Block 4.6: Enhanced Temporal Consistency Capture System
+- **Enhanced upfront capture**: Capture full screen + all individual windows at overlay start
+- **Temporal consistency**: All captures serve from the initial moment, no live recapture
+- **Enhanced visual feedback**: Show actual window content instead of gray highlights
+- **Pre-captured content serving**: Click handlers serve from stored captures
+
+**Sub-blocks:**
+- **Block 4.6a**: Enhanced screen state capture - capture all windows individually
+- **Block 4.6b**: Enhanced window highlighting with actual content preview
+- **Block 4.6c**: Serve pre-captured content for all user interactions
+
+**Note**: Current window listing shows all workspaces - future optimization needed for current workspace filtering
 
 #### Block 4.7: Selection Rectangle Drawing
 - Implement click-and-drag rectangle creation
@@ -166,14 +173,60 @@ This document outlines the development phases for CaptiX, a fast screenshot and 
 - Add smooth overlay transitions
 - Final testing and bug fixes
 
+#### Block 4.12: Window Background Post-Processing
+- Standardize window background handling across different window types
+- Remove inconsistent borders and backgrounds from captured windows
+- Implement intelligent background detection and removal
+- Automatic border detection using edge analysis
+- Smart content area identification and extraction
+- Preserve actual window content while removing decoration artifacts
+
 ### Technical Architecture
+
+**Enhanced Capture Flow:**
+1. Overlay launches and captures frozen screen background (existing)
+2. **NEW**: Immediately capture all visible windows individually using pure window capture
+3. **NEW**: Store both full screen PIL image and individual window images with geometries
+4. Dark overlay appears with real-time window content highlighting
+5. User sees actual window content "pushed forward" when hovering
+6. Click on highlighted window → serves pre-captured window image
+7. Click on desktop → serves full screen image from initial capture
+8. Drag → crops selection area from initial full screen capture
+
+**Benefits:**
+- Perfect temporal consistency - all captures from same moment
+- WYSIWYG - users see exactly what they'll capture
+- No live capture delays during interaction
+- Enhanced visual feedback with actual content preview
+
+**Technical Notes & Future Optimizations:**
+- Window listing currently shows all workspaces, not just current workspace
+- Future optimization: Filter windows by current workspace for better performance
+- Memory optimization: Only capture windows that are actually visible in current workspace
 
 **Overlay Window System:**
 - Full-screen transparent PyQt6 window captures all mouse events
-- Frozen screen background shows current state with cursor visible
+- **Enhanced upfront capture**: Frozen screen background + individual window captures at launch
+- **Temporal consistency**: All user interactions serve from initial capture moment
 - Dark overlay (70% opacity) covers entire screen
-- Real-time window highlighting provides visual feedback
+- **Enhanced window highlighting**: Shows actual captured window content instead of gray overlay
 - Interactive drawing surface for UI elements
+
+**Enhanced Capture Flow:**
+1. Overlay launches and captures frozen screen background (existing)
+2. **NEW**: Immediately capture all visible windows individually using pure window capture
+3. **NEW**: Store both full screen PIL image and individual window images with geometries
+4. Dark overlay appears with real-time window content highlighting
+5. User sees actual window content "pushed forward" when hovering
+6. Click on highlighted window → serves pre-captured window image
+7. Click on desktop → serves full screen image from initial capture
+8. Drag → crops selection area from initial full screen capture
+
+**Benefits:**
+- Perfect temporal consistency - all captures from same moment
+- WYSIWYG - users see exactly what they'll capture
+- No live capture delays during interaction
+- Enhanced visual feedback with actual content preview
 
 **User Experience Flow:**
 1. Overlay launches with frozen screen background
