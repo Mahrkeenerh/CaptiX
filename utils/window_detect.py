@@ -45,19 +45,28 @@ class WindowDetector:
     def _init_atoms(self):
         """Initialize commonly used X11 atoms."""
         atom_names = [
-            '_NET_FRAME_EXTENTS',
-            '_NET_WM_WINDOW_TYPE',
-            '_NET_WM_WINDOW_TYPE_DESKTOP',
-            '_NET_WM_WINDOW_TYPE_DOCK',
-            '_NET_WM_WINDOW_TYPE_TOOLBAR',
-            '_NET_WM_WINDOW_TYPE_MENU',
-            '_NET_WM_WINDOW_TYPE_UTILITY',
-            '_NET_WM_WINDOW_TYPE_SPLASH',
-            '_NET_WM_WINDOW_TYPE_DIALOG',
-            '_NET_WM_WINDOW_TYPE_NORMAL',
-            'WM_CLASS',
-            'WM_NAME',
-            '_NET_WM_NAME'
+            "_NET_FRAME_EXTENTS",
+            "_NET_WM_WINDOW_TYPE",
+            "_NET_WM_WINDOW_TYPE_DESKTOP",
+            "_NET_WM_WINDOW_TYPE_DOCK",
+            "_NET_WM_WINDOW_TYPE_TOOLBAR",
+            "_NET_WM_WINDOW_TYPE_MENU",
+            "_NET_WM_WINDOW_TYPE_UTILITY",
+            "_NET_WM_WINDOW_TYPE_SPLASH",
+            "_NET_WM_WINDOW_TYPE_DIALOG",
+            "_NET_WM_WINDOW_TYPE_NORMAL",
+            "WM_CLASS",
+            "WM_NAME",
+            "_NET_WM_NAME",
+            # Workspace filtering atoms (Phase 4.11)
+            "_NET_CURRENT_DESKTOP",
+            "_NET_WM_DESKTOP",
+            "_NET_NUMBER_OF_DESKTOPS",
+            # Window state atoms for minimized detection
+            "_NET_WM_STATE",
+            "_NET_WM_STATE_HIDDEN",
+            "_NET_WM_STATE_MINIMIZED",
+            "WM_STATE",
         ]
         
         for atom_name in atom_names:
@@ -508,7 +517,149 @@ class WindowDetector:
             logger.error(f"Failed to get visible windows: {e}")
         
         return windows
-    
+
+    def get_current_workspace(self) -> Optional[int]:
+        """Get the current workspace/desktop number."""
+        try:
+            if "_NET_CURRENT_DESKTOP" not in self._atoms:
+                logger.debug("_NET_CURRENT_DESKTOP atom not available")
+                return None
+
+            prop = self.root.get_full_property(
+                self._atoms["_NET_CURRENT_DESKTOP"], Xatom.CARDINAL
+            )
+
+            if prop and prop.value:
+                current_desktop = prop.value[0]
+                logger.debug(f"Current workspace: {current_desktop}")
+                return current_desktop
+
+        except Exception as e:
+            logger.debug(f"Failed to get current workspace: {e}")
+
+        return None
+
+    def get_window_workspace(self, window) -> Optional[int]:
+        """Get the workspace/desktop number for a specific window."""
+        try:
+            if "_NET_WM_DESKTOP" not in self._atoms:
+                return None
+
+            prop = window.get_full_property(
+                self._atoms["_NET_WM_DESKTOP"], Xatom.CARDINAL
+            )
+
+            if prop and prop.value:
+                desktop = prop.value[0]
+                # -1 means window is on all workspaces (sticky)
+                return desktop
+
+        except Exception as e:
+            logger.debug(f"Failed to get window workspace: {e}")
+
+        return None
+
+    def is_window_minimized(self, window) -> bool:
+        """Check if a window is minimized/hidden."""
+        try:
+            # Method 1: Check _NET_WM_STATE for hidden/minimized states
+            if "_NET_WM_STATE" in self._atoms:
+                prop = window.get_full_property(
+                    self._atoms["_NET_WM_STATE"], Xatom.ATOM
+                )
+
+                if prop and prop.value:
+                    states = prop.value
+
+                    # Check for hidden or minimized states
+                    hidden_atoms = []
+                    if "_NET_WM_STATE_HIDDEN" in self._atoms:
+                        hidden_atoms.append(self._atoms["_NET_WM_STATE_HIDDEN"])
+                    if "_NET_WM_STATE_MINIMIZED" in self._atoms:
+                        hidden_atoms.append(self._atoms["_NET_WM_STATE_MINIMIZED"])
+
+                    for state in states:
+                        if state in hidden_atoms:
+                            return True
+
+            # Method 2: Fallback to WM_STATE (older ICCCM standard)
+            if "WM_STATE" in self._atoms:
+                prop = window.get_full_property(
+                    self._atoms["WM_STATE"], self._atoms["WM_STATE"]
+                )
+
+                if prop and prop.value:
+                    wm_state = prop.value[0]
+                    # WM_STATE values: 0=Withdrawn, 1=Normal, 3=Iconic (minimized)
+                    if wm_state == 3:  # Iconic state = minimized
+                        return True
+
+        except Exception as e:
+            logger.debug(f"Failed to check if window is minimized: {e}")
+
+        return False
+
+    def is_window_too_small(self, window_info: WindowInfo, min_size: int = 200) -> bool:
+        """Check if window is too small to be a useful screenshot target."""
+        return window_info.width < min_size or window_info.height < min_size
+
+    def filter_windows_for_capture(self, windows: List[WindowInfo]) -> List[WindowInfo]:
+        """Filter windows to only include those suitable for capture."""
+        current_workspace = self.get_current_workspace()
+        filtered_windows = []
+
+        logger.info(
+            f"Filtering {len(windows)} windows (current workspace: {current_workspace})"
+        )
+
+        for window_info in windows:
+            try:
+                # Skip root windows
+                if window_info.is_root:
+                    continue
+
+                # Skip very small windows
+                if self.is_window_too_small(window_info):
+                    continue
+
+                # Get the actual X11 window object for further checks
+                try:
+                    window_obj = self.display.create_resource_object(
+                        "window", window_info.window_id
+                    )
+                except Exception as e:
+                    logger.debug(
+                        f"Failed to create window object for {window_info.title}: {e}"
+                    )
+                    continue
+
+                # Check if window is minimized
+                if self.is_window_minimized(window_obj):
+                    continue
+
+                # Check workspace if available
+                if current_workspace is not None:
+                    window_workspace = self.get_window_workspace(window_obj)
+                    if window_workspace is not None:
+                        # Include if on current workspace or on all workspaces (-1)
+                        if (
+                            window_workspace != current_workspace
+                            and window_workspace != -1
+                        ):
+                            continue
+
+                # Window passed all filters
+                filtered_windows.append(window_info)
+
+            except Exception as e:
+                logger.warning(f"Error filtering window {window_info.title}: {e}")
+                continue
+
+        logger.info(
+            f"Filtered windows: {len(filtered_windows)} out of {len(windows)} windows"
+        )
+        return filtered_windows
+
     def cleanup(self):
         """Clean up X11 resources."""
         try:

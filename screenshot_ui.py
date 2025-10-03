@@ -130,24 +130,33 @@ class ScreenshotOverlay(QWidget):
         self.magnifier: Optional[MagnifierWidget] = None
 
         self.setup_window()
+
+        # Initialize window detection BEFORE screen capture for proper filtering
+        self.setup_window_detection()
+
+        # Now capture screen with filtering enabled
         self.capture_frozen_screen()
         self.setup_geometry()
         self.setup_animation()
-        self.setup_window_detection()
         self.setup_magnifier()
-        
+
+        # Start the fade-in animation immediately after setup - runs concurrently with window display
+        if self.fade_animation:
+            self.fade_animation.start()
+            logger.info("Fade-in animation started (concurrent with display)")
+
     def setup_window(self):
         """Configure the overlay window properties."""
         # Make window frameless and always on top
         self.setWindowFlags(
-            Qt.WindowType.FramelessWindowHint |
-            Qt.WindowType.WindowStaysOnTopHint |
-            Qt.WindowType.Tool
+            Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.WindowStaysOnTopHint
+            | Qt.WindowType.Tool
         )
-        
+
         # Set window to be transparent
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
-        
+
         # Accept focus to receive key events
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
@@ -159,7 +168,7 @@ class ScreenshotOverlay(QWidget):
 
         # Set window title for debugging
         self.setWindowTitle("CaptiX Screenshot Overlay")
-        
+
         logger.info("Overlay window configured")
 
     def capture_frozen_screen(self):
@@ -211,24 +220,40 @@ class ScreenshotOverlay(QWidget):
             self.frozen_full_image = None
 
     def capture_all_windows(self):
-        """Capture all visible windows individually for temporal consistency."""
+        """Capture all visible windows individually with workspace filtering."""
         try:
-            logger.info("Capturing all visible windows individually...")
+            logger.info(
+                "Capturing visible windows with workspace and minimized filtering..."
+            )
 
             # Get list of all visible windows
-            visible_windows = list_visible_windows()
+            all_visible_windows = list_visible_windows()
+
+            # Apply workspace and minimized filtering
+            if hasattr(self, "window_detector") and self.window_detector:
+                filtered_windows = self.window_detector.filter_windows_for_capture(
+                    all_visible_windows
+                )
+            else:
+                # Fallback to basic filtering if no window detector available
+                filtered_windows = [
+                    w
+                    for w in all_visible_windows
+                    if not w.is_root and w.width >= 200 and w.height >= 200
+                ]
+                logger.info(
+                    f"Using basic filtering: {len(filtered_windows)} out of {len(all_visible_windows)} windows"
+                )
 
             captured_count = 0
             skipped_count = 0
 
-            for window_info in visible_windows:
+            for window_info in filtered_windows:
                 try:
-                    # Skip root windows and very small windows (likely system windows)
-                    if window_info.is_root or (
-                        window_info.width < 50 and window_info.height < 50
-                    ):
+                    # Additional skip check for very small windows (system windows)
+                    if window_info.width < 50 and window_info.height < 50:
                         logger.debug(
-                            f"Skipping window: {window_info.title} ({window_info.width}x{window_info.height})"
+                            f"Skipping small window: {window_info.title} ({window_info.width}x{window_info.height})"
                         )
                         skipped_count += 1
                         continue
@@ -1081,11 +1106,6 @@ class ScreenshotOverlay(QWidget):
         self.setFocus()
         self.activateWindow()
         self.raise_()
-
-        # Start the fade-in animation
-        if self.fade_animation:
-            self.fade_animation.start()
-            logger.info("Fade-in animation started")
 
         logger.info("Overlay window shown and focused")
         

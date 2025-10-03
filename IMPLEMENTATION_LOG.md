@@ -491,8 +491,61 @@ class MagnifierWidget(QWidget):
 
 **Phase 4 Progress Summary:**
 - ✅ **Blocks 4.1-4.10**: Complete interactive screenshot UI with pixel-perfect magnifier and dimensions display - ALL COMPLETED
-- 🔄 **Block 4.11**: Capture integration and polish - READY FOR IMPLEMENTATION  
-- 📋 **Block 4.12**: Window background post-processing - PLANNED
+- ✅ **Block 4.11**: Workspace filtering optimization and animation improvements - COMPLETED
+- � **Block 4.12**: Window background post-processing - PLANNED
+
+#### 9. Workspace Filtering Optimization & Animation Improvements (Block 4.11) ✅ COMPLETED
+
+**Date:** October 3, 2025
+
+##### A. Workspace and Minimized Window Filtering ✅
+- ✅ **Enhanced WindowDetector atoms** - Added X11 atoms for workspace detection (`_NET_CURRENT_DESKTOP`, `_NET_WM_DESKTOP`, `_NET_WM_STATE`)
+- ✅ **Current workspace detection** - `get_current_workspace()` method using EWMH standards
+- ✅ **Window workspace filtering** - `get_window_workspace()` for per-window workspace detection  
+- ✅ **Minimized window detection** - `is_window_minimized()` with dual detection (EWMH and ICCCM fallback)
+- ✅ **Size-based filtering** - `is_window_too_small()` for excluding tiny system windows
+- ✅ **Comprehensive filtering system** - `filter_windows_for_capture()` orchestrating all filters
+- ✅ **Integration optimization** - Window detector initialized before screen capture for proper filtering
+
+**Performance Results:**
+- **71% window reduction**: From 14 total windows to 4 relevant windows (exactly as expected)
+- **Capture optimization**: Only relevant windows are captured, reducing processing overhead
+- **Workspace awareness**: Only captures windows on current workspace plus sticky windows (-1)
+- **Minimized exclusion**: Automatic exclusion of minimized/hidden windows via both `_NET_WM_STATE` and `WM_STATE`
+
+**Technical Implementation:**
+```python
+# New filtering methods in WindowDetector class
+def get_current_workspace(self) -> Optional[int]          # EWMH workspace detection
+def get_window_workspace(self, window) -> Optional[int]   # Per-window workspace detection  
+def is_window_minimized(self, window) -> bool            # Dual minimized detection
+def filter_windows_for_capture(self, windows) -> List    # Main filtering orchestration
+```
+
+**Filter Criteria Applied:**
+1. **Root window exclusion** - Skips desktop/root windows
+2. **Size filtering** - Excludes windows smaller than 200x200 pixels
+3. **Minimized detection** - Uses both EWMH (`_NET_WM_STATE_HIDDEN`) and ICCCM (`WM_STATE=3`)
+4. **Workspace filtering** - Only includes windows on current workspace or sticky windows
+5. **Error resilience** - Graceful handling of window detection failures
+
+##### B. Fade-in Animation Optimization ✅
+- ✅ **Concurrent animation start** - Animation begins immediately after setup completion
+- ✅ **Non-blocking initialization** - Animation runs in parallel with window display operations
+- ✅ **Removed showEvent dependency** - Animation no longer waits for window show event
+- ✅ **Performance improvement** - Eliminates animation wait time from user experience
+- ✅ **Maintained 0.25s duration** - Professional fade timing preserved after testing
+
+**Animation Timing Optimization:**
+- **Before**: Animation started in `showEvent()` after window display - sequential execution
+- **After**: Animation started in `__init__()` after setup - concurrent with window display
+- **Result**: User sees smooth fade-in immediately rather than waiting for window events
+
+**Testing & Validation:**
+- ✅ **Filter verification**: Log output shows "Filtering 14 windows (current workspace: 2)" → "Filtered windows: 4 out of 14 windows"
+- ✅ **Animation functionality**: Confirmed fade-in works properly with concurrent start
+- ✅ **No regressions**: All existing functionality preserved
+- ✅ **Error handling**: Robust fallback when workspace detection unavailable
 
 ---
 
