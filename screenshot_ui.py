@@ -2,11 +2,10 @@
 """
 CaptiX Screenshot UI - Interactive overlay for screenshot selection
 
-Phase 4, Block 4.7: Selection Rectangle Drawing - COMPLETED
-- Implement click-and-drag rectangle creation
-- Draw selection border (bright, 2px)
-- Clear dark overlay within selection area
-- Show actual screen content in selection
+Phase 4, Block 4.10: Selection Dimensions Display - COMPLETED
+- Show selection width x height in dimensions display
+- Anchor dimensions to bottom-right corner of selection, inside selection area
+- Format: "W × H" with clean styling and readable background
 
 Previous blocks completed:
 - Block 4.1: PyQt6 Setup & Basic Overlay
@@ -16,12 +15,13 @@ Previous blocks completed:
 - Block 4.5: Basic Mouse Event Handling
 - Block 4.6: Enhanced Temporal Consistency Capture System
 - Block 4.7: Selection Rectangle Drawing
-
-Next blocks:
 - Block 4.8: Basic Magnifier Widget
 - Block 4.9: Enhanced Magnifier Features
 - Block 4.10: Selection Dimensions Display
+
+Next blocks:
 - Block 4.11: Capture Integration & Polish
+- Block 4.12: Window Background Post-Processing
 """
 
 import sys
@@ -870,6 +870,9 @@ class ScreenshotOverlay(QWidget):
             if cursor_x > origin_x:
                 painter.drawLine(left, top, left, bottom)
 
+            # Draw selection dimensions display (Phase 4.10)
+            self.draw_selection_dimensions(painter)
+
             logger.debug(
                 f"Selection rectangle drawn: {self.selection_rect.width()}x{self.selection_rect.height()} "
                 f"at ({self.selection_rect.x()}, {self.selection_rect.y()})"
@@ -1014,6 +1017,60 @@ class ScreenshotOverlay(QWidget):
 
         logger.debug(
             f"Crosshair guidelines drawn at cursor position ({cursor_x}, {cursor_y})"
+        )
+
+    def draw_selection_dimensions(self, painter: QPainter):
+        """Draw selection dimensions anchored to bottom-right corner of selection (Phase 4.10)."""
+        if not self.selection_rect or self.selection_rect.isEmpty():
+            return
+
+        # Get selection dimensions
+        width = self.selection_rect.width()
+        height = self.selection_rect.height()
+
+        # Format dimensions text
+        dimensions_text = f"{width} × {height}"
+
+        # Set up font and calculate text size
+        from PyQt6.QtGui import QFont, QFontMetrics
+
+        font = QFont("Arial", 12, QFont.Weight.Bold)  # Smaller font size
+        painter.setFont(font)
+        font_metrics = QFontMetrics(font)
+        text_rect = font_metrics.boundingRect(dimensions_text)
+
+        # Add padding around text
+        padding = 6  # Smaller padding
+        text_bg_width = text_rect.width() + (padding * 2)
+        text_bg_height = text_rect.height() + (padding * 2)
+
+        # Position at bottom-right corner of selection, inside the selection area
+        selection_bottom_right_x = self.selection_rect.right()
+        selection_bottom_right_y = self.selection_rect.bottom()
+
+        # Anchor to bottom-right, inside selection
+        bg_x = selection_bottom_right_x - text_bg_width - 10  # 10px margin from edge
+        bg_y = selection_bottom_right_y - text_bg_height - 10  # 10px margin from edge
+
+        # Create background rectangle
+        bg_rect = QRect(bg_x, bg_y, text_bg_width, text_bg_height)
+
+        # Draw semi-transparent background
+        painter.fillRect(bg_rect, QColor(0, 0, 0, 120))  # Dark background
+
+        # Draw the dimensions text (no border)
+        text_pen = painter.pen()
+        text_pen.setColor(QColor(255, 255, 255, 255))  # White text
+        text_pen.setWidth(1)
+        painter.setPen(text_pen)
+
+        # Center text within background rectangle
+        text_x = bg_x + padding
+        text_y = bg_y + padding + font_metrics.ascent()
+        painter.drawText(text_x, text_y, dimensions_text)
+
+        logger.debug(
+            f"Selection dimensions displayed: {dimensions_text} at ({bg_x}, {bg_y})"
         )
 
     def showEvent(self, event):

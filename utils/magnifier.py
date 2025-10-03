@@ -86,13 +86,13 @@ class MagnifierWidget(QWidget):
         self.update()
         
     def position_magnifier(self):
-        """Position the magnifier widget at top-left of cursor (Phase 4.9)."""
+        """Position the magnifier widget at bottom-left of cursor (Phase 4.9)."""
         if not self.source_image:
             return
-            
-        # Position at top-left of cursor with offset
+
+        # Position at bottom-left of cursor with offset
         magnifier_x = self.cursor_x - self.MAGNIFIER_SIZE - self.MAGNIFIER_OFFSET
-        magnifier_y = self.cursor_y - self.MAGNIFIER_SIZE - self.MAGNIFIER_OFFSET
+        magnifier_y = self.cursor_y + self.MAGNIFIER_OFFSET
         
         # Get screen geometry to ensure we stay within bounds
         try:
@@ -107,10 +107,10 @@ class MagnifierWidget(QWidget):
         if magnifier_x < 0:
             # Move to right side of cursor if left side is off-screen
             magnifier_x = self.cursor_x + self.MAGNIFIER_OFFSET
-            
-        if magnifier_y < 0:
-            # Move below cursor if top side is off-screen
-            magnifier_y = self.cursor_y + self.MAGNIFIER_OFFSET
+
+        if magnifier_y + self.MAGNIFIER_SIZE > screen.bottom():
+            # Move above cursor if bottom side is off-screen
+            magnifier_y = self.cursor_y - self.MAGNIFIER_SIZE - self.MAGNIFIER_OFFSET
             
         # Final bounds check
         magnifier_x = max(0, min(magnifier_x, screen.right() - self.MAGNIFIER_SIZE))

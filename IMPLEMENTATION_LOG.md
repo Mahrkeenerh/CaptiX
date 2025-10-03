@@ -428,6 +428,15 @@ The implementation exceeds the original requirements by providing true pure wind
 - ✅ **Visual consistency** - Blue color scheme matching overall UI theme
 - ✅ **Optimized thickness** - Crosshair guidelines sized as pixel_size - 1 for visual balance
 
+#### 8. Selection Dimensions Display (Block 4.10) ✅ COMPLETED
+- ✅ **Anchored dimensions display** - Shows "W × H" format anchored to bottom-right corner of selection area
+- ✅ **Inside selection positioning** - Dimensions appear inside the selection rectangle with 10px margin from edges
+- ✅ **Optimized styling** - 12pt Arial Bold font with 6px padding for compact appearance
+- ✅ **Clean background** - Semi-transparent dark background without border for minimal visual interference
+- ✅ **Consistent color scheme** - White text matching overall UI design language
+- ✅ **Real-time updates** - Dimensions update dynamically during drag selection operations
+- ✅ **Bottom-left magnifier positioning** - Magnifier repositioned to bottom-left of cursor to avoid dimension overlap
+
 ### Technical Implementation:
 
 **Magnifier Architecture:**
@@ -474,7 +483,6 @@ class MagnifierWidget(QWidget):
 3. **Unified Visual Styling** - Consistent blue/cyan color scheme throughout UI
 
 ### Foundation for Future Phases:
-- **Block 4.10**: Selection dimensions display ready for magnifier integration
 - **Block 4.11**: Capture integration prepared with existing temporal consistency system
 - **Phase 5**: Global hotkey daemon ready to spawn this complete UI system
 - **Phase 6**: Video recording area selection can reuse same magnifier for precision
@@ -482,8 +490,8 @@ class MagnifierWidget(QWidget):
 ---
 
 **Phase 4 Progress Summary:**
-- ✅ **Blocks 4.1-4.9**: Complete interactive screenshot UI with pixel-perfect magnifier - ALL COMPLETED
-- 🔄 **Blocks 4.10-4.11**: Selection dimensions display and capture integration - READY FOR IMPLEMENTATION  
+- ✅ **Blocks 4.1-4.10**: Complete interactive screenshot UI with pixel-perfect magnifier and dimensions display - ALL COMPLETED
+- 🔄 **Block 4.11**: Capture integration and polish - READY FOR IMPLEMENTATION  
 - 📋 **Block 4.12**: Window background post-processing - PLANNED
 
 ---
