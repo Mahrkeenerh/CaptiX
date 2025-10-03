@@ -836,13 +836,39 @@ class ScreenshotOverlay(QWidget):
                 )
                 painter.fillRect(right_rect, dark_overlay_color)
 
-            # Draw selection border (bright, 2px)
+            # Draw selection border based on drag direction from origin point
             pen = painter.pen()
-            pen.setColor(QColor(0, 255, 255, 255))  # Bright cyan border
+            pen.setColor(QColor(0, 150, 255, 200))  # Same blue as window highlight
             pen.setWidth(2)  # 2px border
             pen.setStyle(Qt.PenStyle.DashDotLine)  # Dash-dot style to match guidelines
             painter.setPen(pen)
-            painter.drawRect(self.selection_rect)
+
+            # Get selection rectangle bounds
+            left = self.selection_rect.left()
+            right = self.selection_rect.right()
+            top = self.selection_rect.top()
+            bottom = self.selection_rect.bottom()
+
+            # Get drag origin and current cursor position
+            origin_x, origin_y = self.press_position
+            cursor_x, cursor_y = self.cursor_x, self.cursor_y
+
+            # Determine drag direction and draw only relevant borders
+            # Draw bottom border if dragging upward (cursor above origin)
+            if cursor_y < origin_y:
+                painter.drawLine(left, bottom, right, bottom)
+
+            # Draw top border if dragging downward (cursor below origin)
+            if cursor_y > origin_y:
+                painter.drawLine(left, top, right, top)
+
+            # Draw right border if dragging leftward (cursor left of origin)
+            if cursor_x < origin_x:
+                painter.drawLine(right, top, right, bottom)
+
+            # Draw left border if dragging rightward (cursor right of origin)
+            if cursor_x > origin_x:
+                painter.drawLine(left, top, left, bottom)
 
             logger.debug(
                 f"Selection rectangle drawn: {self.selection_rect.width()}x{self.selection_rect.height()} "
