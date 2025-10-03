@@ -51,6 +51,7 @@ from PIL import Image
 from utils.capture import ScreenCapture, list_visible_windows
 from utils.clipboard import copy_image_to_clipboard
 from utils.window_detect import WindowDetector, WindowInfo
+from utils.magnifier import MagnifierWidget
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG)  # Enable debug logging
@@ -125,11 +126,15 @@ class ScreenshotOverlay(QWidget):
             True  # Default to True for bring-to-front preview
         )
 
+        # Magnifier widget state (Block 4.8)
+        self.magnifier: Optional[MagnifierWidget] = None
+
         self.setup_window()
         self.capture_frozen_screen()
         self.setup_geometry()
         self.setup_animation()
         self.setup_window_detection()
+        self.setup_magnifier()
         
     def setup_window(self):
         """Configure the overlay window properties."""
@@ -389,6 +394,15 @@ class ScreenshotOverlay(QWidget):
             self.window_detector = None
             self.overlay_window_id = None
 
+    def setup_magnifier(self):
+        """Initialize the magnifier widget (Block 4.8)."""
+        try:
+            self.magnifier = MagnifierWidget()
+            logger.info("Magnifier widget initialized (150x150px)")
+        except Exception as e:
+            logger.error(f"Failed to initialize magnifier widget: {e}")
+            self.magnifier = None
+
     def update_window_highlight(self, x: int, y: int):
         """Update window highlighting based on cursor position."""
         if not self.window_detector:
@@ -515,6 +529,22 @@ class ScreenshotOverlay(QWidget):
                 # Clear window highlighting when dragging starts
                 self.highlighted_window = None
 
+        # Always update magnifier position during cursor movement (Block 4.8)
+        if self.magnifier and self.frozen_screen:
+            # Only log occasionally to reduce spam
+            if global_pos.x() % 50 == 0:  # Log every 50 pixels
+                logger.info(
+                    f"Updating magnifier at cursor position ({global_pos.x()}, {global_pos.y()})"
+                )
+            self.magnifier.set_source_image(self.frozen_screen)
+            self.magnifier.update_cursor_position(global_pos.x(), global_pos.y())
+            self.magnifier.show_magnifier()
+        else:
+            if not self.magnifier:
+                logger.warning("Magnifier is None!")
+            if not self.frozen_screen:
+                logger.warning("Frozen screen is None!")
+
         # Handle active dragging (Block 4.7)
         if self.is_dragging:
             current_pos = (global_pos.x(), global_pos.y())
@@ -590,6 +620,10 @@ class ScreenshotOverlay(QWidget):
             self.mouse_pressed = False
             self.is_dragging = False
             self.selection_rect = None
+
+            # Hide magnifier on mouse release (Block 4.8)
+            if self.magnifier:
+                self.magnifier.hide_magnifier()
 
             logger.info(
                 f"Mouse released at {current_pos}, duration: {click_duration_ms:.1f}ms, moved: {distance_moved}px"
@@ -996,6 +1030,12 @@ class ScreenshotOverlay(QWidget):
         # Clean up enhanced capture data (Block 4.6a)
         self.frozen_full_image = None
         self.captured_windows.clear()
+
+        # Clean up magnifier widget (Block 4.8)
+        if self.magnifier:
+            self.magnifier.hide_magnifier()
+            self.magnifier.close()
+            self.magnifier = None
 
         # Clear highlighting state
         self.highlighted_window = None

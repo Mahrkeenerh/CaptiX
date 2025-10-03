@@ -368,11 +368,11 @@ The implementation exceeds the original requirements by providing true pure wind
 
 ---
 
-## Phase 4: Screenshot UI with Area Selection ✅ BLOCKS 4.1-4.7 COMPLETED
+## Phase 4: Screenshot UI with Area Selection ✅ BLOCKS 4.1-4.9 COMPLETED
 
-**Date:** September 29 - October 1, 2025  
+**Date:** September 29 - October 3, 2025  
 **Git Commits:** 
-- `[pending]` - Phase 4: Complete PyQt6 interactive screenshot UI with selection rectangle
+- `[pending]` - Phase 4: Complete PyQt6 interactive screenshot UI with selection rectangle and magnifier
 
 ### Completed Features:
 
@@ -402,7 +402,7 @@ The implementation exceeds the original requirements by providing true pure wind
 - ✅ **Enhanced file naming** - `sc_YYYY-MM-DD_HHMMSS_<suffix>.png` format with type suffixes
 - ✅ **Clipboard integration** - All capture types automatically copy to clipboard
 
-#### 5. Selection Rectangle Drawing (Block 4.7) ✅ NEW
+#### 5. Selection Rectangle Drawing (Block 4.7) ✅
 - ✅ **Click-and-drag rectangle creation** - Detects drag start at 5px movement threshold
 - ✅ **Bright selection border** - 2px cyan border (RGB: 0, 255, 255) for high visibility
 - ✅ **Clear overlay within selection** - Dark overlay excluded from selection area, shows actual screen content
@@ -410,105 +410,80 @@ The implementation exceeds the original requirements by providing true pure wind
 - ✅ **Precise area calculation** - Accurate coordinate handling for any drag direction
 - ✅ **Visual feedback system** - Selection area shows frozen screen content without dark overlay
 
+#### 6. Basic Magnifier Widget (Block 4.8) ✅ COMPLETED
+- ✅ **Separate magnifier window** - 210x210px optimized for 21x21 pixel grid
+- ✅ **Cursor-relative positioning** - Top-left offset from cursor for optimal visibility
+- ✅ **10x zoom magnification** - Refined zoom level for pixel-perfect precision
+- ✅ **Real-time cursor tracking** - Magnifier follows mouse movement during overlay interaction
+- ✅ **Qt widget integration** - Frameless, always-on-top widget with proper focus management
+- ✅ **Performance optimization** - Shows during movement, hides on mouse release
+
+#### 7. Enhanced Magnifier Features (Block 4.9) ✅ COMPLETED
+- ✅ **Pixel grid overlay** - Subtle white grid lines for pixel boundary visualization
+- ✅ **Center pixel highlighting** - Blue border (0, 150, 255) around cursor's current pixel
+- ✅ **Crosshair guidelines** - White crosshair lines extending across entire magnifier
+- ✅ **Coordinate display** - Real-time X,Y coordinates shown in magnifier header
+- ✅ **Perfect centering** - 21x21 pixel grid (odd number) for true center pixel
+- ✅ **Pixel-perfect alignment** - Precise border positioning and crosshair alignment
+- ✅ **Visual consistency** - Blue color scheme matching overall UI theme
+- ✅ **Optimized thickness** - Crosshair guidelines sized as pixel_size - 1 for visual balance
+
 ### Technical Implementation:
 
-**Core Architecture:**
+**Magnifier Architecture:**
 ```python
-class ScreenshotOverlay(QWidget):
-    # Multi-layered rendering: frozen screen + dark overlay + window highlights + selection rectangle
-    # Temporal consistency: all content pre-captured at startup
-    # Real-time preview: shows actual window content during highlighting
-    # Selection system: bright cyan border with clear content area
+class MagnifierWidget(QWidget):
+    MAGNIFIER_SIZE = 210      # Size for 21x21 pixels
+    ZOOM_FACTOR = 10          # 10x magnification
+    MAGNIFIER_OFFSET = 30     # Offset from cursor
 ```
 
-**Enhanced Capture System Integration:**
-- **Window capture** (`_win` suffix): Uses pre-captured pure window content
-- **Desktop capture** (`_full` suffix): Uses frozen full-screen image
-- **Area capture** (`_area` suffix): Crops from frozen desktop image  
-- **Perfect consistency**: No timing issues or window state changes
+**Advanced Features:**
+- **Pixel-perfect rendering** - No antialiasing, sharp pixel boundaries
+- **Dynamic coordinate calculation** - Real-time center pixel detection and highlighting
+- **Temporal consistency** - Uses same frozen screen capture as overlay system
+- **Professional styling** - Dark background, white borders, blue accent colors
+- **Qt integration** - Transparent for mouse events, never steals focus
 
-**Selection Rectangle System (Block 4.7):**
-- **Drag detection**: 5px movement threshold triggers selection mode
-- **Multi-region dark overlay**: Covers screen except selection area
-- **Bright border**: 2px cyan border for high visibility over any content
-- **Real-time updates**: Selection rectangle updates with mouse movement
-- **Content preservation**: Selection area shows actual frozen screen content
-
-**Enhanced Data Structures:**
-```python
-@dataclass
-class CapturedWindow:
-    window_info: WindowInfo
-    image: Image.Image      # PIL Image of pure content
-    qpixmap: QPixmap       # Cached for rendering
-    geometry: QRect        # Position at capture time
-
-# Selection rectangle state (Block 4.7)
-self.is_dragging: bool = False
-self.current_drag_pos: tuple = (0, 0)
-self.selection_rect: Optional[QRect] = None
-```
+**Enhanced Rendering System:**
+- **Grid overlay**: White lines with 60 alpha for subtle pixel boundaries
+- **Center pixel border**: Solid blue 2px border with pixel-perfect alignment
+- **Crosshair guidelines**: Full-span white lines through center pixel
+- **Coordinate display**: "X: 1234, Y: 567" format in top portion of magnifier
 
 ### Testing Results:
-- ✅ **Multi-window compatibility**: VS Code, Brave browser, Nemo file manager
-- ✅ **Accurate targeting**: Window captures produce different file sizes confirming correct selection
-- ✅ **Performance**: Smooth interactions with pre-captured content system
-- ✅ **Visual feedback**: Real-time content preview during window highlighting
-- ✅ **Resource efficiency**: Proper cleanup with no memory leaks or hanging processes
-- ✅ **Selection rectangle drawing** (Block 4.7): Successfully implemented drag selection with clear areas
-- ✅ **Area capture functionality**: Tested 446x579 and 892x316 pixel selections working correctly
-- ✅ **Border visibility**: Bright cyan border visible over any content type
+- ✅ **Magnifier visibility**: Appears correctly during cursor movement
+- ✅ **Coordinate accuracy**: Real-time position updates match cursor location
+- ✅ **Visual clarity**: 21x21 grid provides perfect centering with clear center pixel
+- ✅ **Performance**: Smooth tracking with no lag or visual artifacts
+- ✅ **Pixel precision**: Grid alignment and highlighting accurate to single pixels
+- ✅ **Color consistency**: Blue theme (0, 150, 255) matches selection rectangle
+- ✅ **Focus management**: Never interferes with overlay's keyboard handling
+- ✅ **Cross-application compatibility**: Works consistently across all window types
 
 ### Code Quality:
-- Clean PyQt6 integration with comprehensive error handling
-- Modular design with clear separation of concerns
-- Type hints and comprehensive logging throughout
-- Professional animation system with proper resource management
-- Robust coordinate system handling all window manager types
+- **Modular design**: Separate magnifier module with clean integration
+- **Type safety**: Full type hints throughout magnifier implementation
+- **Resource management**: Proper Qt widget lifecycle and cleanup
+- **Performance optimization**: Efficient coordinate calculations and minimal repaints
+- **Error handling**: Graceful fallbacks for edge cases and boundary conditions
 
-### Known Limitations:
-- **Window background inconsistency**: Terminal vs file browser transparency handling varies
-- **Planned enhancement**: Block 4.12 post-processing for background standardization
+### QoL Enhancements Completed:
+1. **Precision Targeting System** - Crosshair cursor with dash-dot guidelines
+2. **Right-Click Window Preview Toggle** - ON/OFF mode for window preview vs drag precision
+3. **Unified Visual Styling** - Consistent blue/cyan color scheme throughout UI
 
 ### Foundation for Future Phases:
-- **Magnifier widget framework** (Block 4.8): PyQt6 overlay system ready for additional widgets
-- **Enhanced selection system** (Blocks 4.9-4.11): Rectangle drawing foundation prepared for magnifier integration
-- **Global hotkey system** (Phase 5): CLI integration prepared for daemon spawning
-- **Video recording** (Phase 6): Window detection and area selection systems ready for recording area selection
-
----
-
-## Phase 4 QoL Enhancement: Precision Targeting System ✅ COMPLETED
-
-**Date:** October 1, 2025  
-
-### Features:
-1. **Crosshair cursor** + **dash-dot guidelines** (blue, 2px, full-screen)
-2. **Unified dash-dot styling** for all borders (window highlights, selection rectangles)
-3. **Real-time cursor tracking** with optimized repaints
-4. **Consistent blue/cyan color scheme** throughout UI
-
-**Result**: Professional precision targeting system ready for Phase 4.8 magnifier.
-
----
-
-## Phase 4 UX Enhancement: Right-Click Window Preview Toggle ✅ COMPLETED
-
-**Date:** October 1, 2025  
-
-### Features:
-1. **Right-click toggle** for window preview mode (ON/OFF)
-2. **Default preview ON** - shows full window content on hover
-3. **Preview OFF mode** - shows only border highlights for precise drag selection
-4. **Visual feedback** in logs indicating current mode state
-
-**Result**: Solves UX conflict between window preview and drag selection precision.
+- **Block 4.10**: Selection dimensions display ready for magnifier integration
+- **Block 4.11**: Capture integration prepared with existing temporal consistency system
+- **Phase 5**: Global hotkey daemon ready to spawn this complete UI system
+- **Phase 6**: Video recording area selection can reuse same magnifier for precision
 
 ---
 
 **Phase 4 Progress Summary:**
-- ✅ **Blocks 4.1-4.7**: Core overlay, screen capture, dark layer, window highlighting, mouse events, temporal consistency, and selection rectangle drawing - ALL COMPLETED
-- 🔄 **Blocks 4.8-4.11**: Magnifier widgets, dimensions display, and capture integration - READY FOR IMPLEMENTATION
+- ✅ **Blocks 4.1-4.9**: Complete interactive screenshot UI with pixel-perfect magnifier - ALL COMPLETED
+- 🔄 **Blocks 4.10-4.11**: Selection dimensions display and capture integration - READY FOR IMPLEMENTATION  
 - 📋 **Block 4.12**: Window background post-processing - PLANNED
 
 ---
