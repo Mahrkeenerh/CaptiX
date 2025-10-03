@@ -742,9 +742,10 @@ class ScreenshotOverlay(QWidget):
             # Use pre-captured desktop content for cropping
             if self.frozen_full_image:
                 # Crop the selected area from frozen image
+                # Add 1 pixel to right and bottom to include the current selected pixel
                 try:
                     cropped_image = self.frozen_full_image.crop(
-                        (left, top, right, bottom)
+                        (left, top, right + 1, bottom + 1)
                     )
                     # Use existing save infrastructure
                     filepath, file_size = self.capture_system.save_screenshot(
