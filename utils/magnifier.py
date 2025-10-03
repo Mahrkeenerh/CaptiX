@@ -223,10 +223,12 @@ class MagnifierWidget(QWidget):
         coord_text = f"X: {self.cursor_x}  Y: {self.cursor_y}"
         text_rect = painter.boundingRect(0, 0, 0, 0, Qt.AlignmentFlag.AlignLeft, coord_text)
         text_bg_rect = text_rect.adjusted(-5, -2, 5, 2)
-        text_bg_rect.moveTopLeft(QPoint(8, 8))  # Position at top-left with margin
+        # Center horizontally, position at top with margin
+        center_x = (self.MAGNIFIER_SIZE - text_bg_rect.width()) // 2
+        text_bg_rect.moveTopLeft(QPoint(center_x, 8))
         
         # Semi-transparent background for text
-        painter.fillRect(text_bg_rect, QColor(0, 0, 0, 180))
+        painter.fillRect(text_bg_rect, QColor(0, 0, 0, 120))
         
         # Draw the coordinates text
         painter.drawText(text_bg_rect.adjusted(5, 2, -5, -2), Qt.AlignmentFlag.AlignLeft, coord_text)
