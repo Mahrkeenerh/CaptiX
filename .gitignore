@@ -41,3 +41,6 @@ Thumbs.db
 
 # CaptiX specific
 captix.log
+
+# External projects
+SnapZones/

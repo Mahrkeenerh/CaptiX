@@ -1,0 +1,3 @@
+python-xlib>=0.33
+Pillow>=10.0.0
+PyQt6>=6.4.0
