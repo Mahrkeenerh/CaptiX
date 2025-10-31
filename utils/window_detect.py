@@ -45,6 +45,7 @@ class WindowDetector:
     def _init_atoms(self):
         """Initialize commonly used X11 atoms."""
         atom_names = [
+            "_GTK_FRAME_EXTENTS",  # Must be checked BEFORE _NET_FRAME_EXTENTS
             "_NET_FRAME_EXTENTS",
             "_NET_WM_WINDOW_TYPE",
             "_NET_WM_WINDOW_TYPE_DESKTOP",
@@ -376,34 +377,89 @@ class WindowDetector:
                 geom = window.get_geometry()
                 return geom.x, geom.y
     
-    def _get_frame_extents(self, window) -> Optional[Tuple[int, int, int, int]]:
+    def get_window_frame_extents(self, window) -> Tuple[int, int, int, int]:
         """
-        Get window frame extents (decorations) if available.
-        
+        Get frame extents (window decorations) for a window.
+
+        This method checks for both GTK client-side decorations (_GTK_FRAME_EXTENTS)
+        and standard window manager decorations (_NET_FRAME_EXTENTS).
+
+        GTK applications with client-side decorations often have invisible borders
+        for drop shadows and resize areas. These must be detected to capture only
+        the visible window content.
+
         Args:
             window: X11 window object
-            
+
         Returns:
-            Tuple of (left, right, top, bottom) extents or None
+            Tuple of (left, right, top, bottom) border sizes in pixels
         """
+        # 1. First try _GTK_FRAME_EXTENTS for GTK apps with client-side decorations
+        #    This property describes invisible borders/shadows around GTK windows
         try:
-            if '_NET_FRAME_EXTENTS' not in self._atoms:
-                return None
-            
-            prop = window.get_property(
-                self._atoms['_NET_FRAME_EXTENTS'],
-                Xatom.CARDINAL,
-                0, 4
-            )
-            
-            if prop and prop.value and len(prop.value) >= 4:
-                # _NET_FRAME_EXTENTS: left, right, top, bottom
-                return (prop.value[0], prop.value[1], prop.value[2], prop.value[3])
-                
+            if '_GTK_FRAME_EXTENTS' in self._atoms:
+                prop = window.get_property(
+                    self._atoms['_GTK_FRAME_EXTENTS'],
+                    Xatom.CARDINAL,
+                    0, 4
+                )
+
+                if prop and prop.value and len(prop.value) >= 4:
+                    left, right, top, bottom = prop.value[:4]
+                    logger.debug(f"GTK frame extents detected: left={left}, right={right}, top={top}, bottom={bottom}")
+                    return (left, right, top, bottom)
         except Exception as e:
-            logger.debug(f"Failed to get frame extents: {e}")
-        
-        return None
+            logger.debug(f"Failed to get GTK frame extents: {e}")
+
+        # 2. Try _NET_FRAME_EXTENTS property (standard window manager decorations)
+        try:
+            if '_NET_FRAME_EXTENTS' in self._atoms:
+                prop = window.get_property(
+                    self._atoms['_NET_FRAME_EXTENTS'],
+                    Xatom.CARDINAL,
+                    0, 4
+                )
+
+                if prop and prop.value and len(prop.value) >= 4:
+                    left, right, top, bottom = prop.value[:4]
+                    logger.debug(f"NET frame extents detected: left={left}, right={right}, top={top}, bottom={bottom}")
+                    return (left, right, top, bottom)
+        except Exception as e:
+            logger.debug(f"Failed to get NET frame extents: {e}")
+
+        # 3. Fallback: estimate from window geometry
+        try:
+            geom = window.get_geometry()
+
+            # If window has negative coordinates, it has borders
+            left_border = max(0, -geom.x) if geom.x < 0 else 0
+            top_border = max(0, -geom.y) if geom.y < 0 else 0
+
+            # If left border detected, assume uniform borders (common pattern)
+            if left_border > 0:
+                logger.debug(f"Estimated uniform borders from geometry: {left_border}px")
+                return (left_border, left_border, left_border, left_border)
+
+            # If only top border, it's likely a title bar
+            if top_border > 0:
+                logger.debug(f"Estimated title bar from geometry: {top_border}px")
+                return (0, 0, top_border, 0)
+        except Exception as e:
+            logger.debug(f"Failed to estimate frame extents: {e}")
+
+        # No borders detected
+        return (0, 0, 0, 0)
+
+    def _get_frame_extents(self, window) -> Optional[Tuple[int, int, int, int]]:
+        """
+        Legacy method - calls get_window_frame_extents() and returns None if no borders.
+
+        Kept for backward compatibility.
+        """
+        extents = self.get_window_frame_extents(window)
+        if extents == (0, 0, 0, 0):
+            return None
+        return extents
     
     def _get_window_class(self, window) -> str:
         """Get window class name."""

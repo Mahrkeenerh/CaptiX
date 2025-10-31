@@ -98,6 +98,13 @@ Tracks implementation progress through all development phases.
 - Crosshair guidelines for precision targeting
 - Right-click window preview toggle
 
+### 4.12: Frame Extents Detection & Border-Free Capture
+- `_GTK_FRAME_EXTENTS` detection for GTK apps with invisible borders
+- Content-only window capture excluding borders at capture time
+- Border-aware cursor positioning
+- Highlighting geometry matches captured content
+- Eliminated post-processing need
+
 ---
 
 ## Phase 5: Global Hotkey System ✅

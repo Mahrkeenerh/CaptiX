@@ -63,18 +63,29 @@ class CapturedWindow:
     """Stores a captured window with its metadata at capture time."""
 
     window_info: WindowInfo
-    image: Image.Image  # PIL Image of just this window
+    image: Image.Image  # PIL Image of just this window (content-only, borders excluded)
     qpixmap: Optional[QPixmap] = None  # Cached QPixmap for efficient rendering
-    geometry: QRect = None  # Position/size at capture time
+    geometry: QRect = None  # Position/size at capture time (content-only)
+    left_border: int = 0  # Left border size that was excluded
+    top_border: int = 0  # Top border size that was excluded
 
     def __post_init__(self):
-        """Initialize geometry from window_info."""
+        """Initialize geometry from actual captured image dimensions and border offsets."""
         if self.geometry is None:
+            # Use the actual image dimensions (content-only, borders excluded)
+            content_width = self.image.width
+            content_height = self.image.height
+
+            # Adjust position using actual border offsets
+            # The content starts at window position + border offset
+            adjusted_x = self.window_info.x + self.left_border
+            adjusted_y = self.window_info.y + self.top_border
+
             self.geometry = QRect(
-                self.window_info.x,
-                self.window_info.y,
-                self.window_info.width,
-                self.window_info.height,
+                adjusted_x,
+                adjusted_y,
+                content_width,
+                content_height,
             )
 
 
@@ -259,14 +270,20 @@ class ScreenshotOverlay(QWidget):
                         continue
 
                     # Capture this window's pure content without cursor
-                    window_image = self.capture_system.capture_window_pure_content(
+                    result = self.capture_system.capture_window_pure_content(
                         window_info.window_id, include_cursor=False
                     )
 
-                    if window_image:
-                        # Store the captured window
+                    if result:
+                        # Unpack the result tuple (image, left_border, top_border)
+                        window_image, left_border, top_border = result
+
+                        # Store the captured window with border information
                         captured_window = CapturedWindow(
-                            window_info=window_info, image=window_image
+                            window_info=window_info,
+                            image=window_image,
+                            left_border=left_border,
+                            top_border=top_border,
                         )
 
                         self.captured_windows[window_info.window_id] = captured_window
@@ -929,8 +946,13 @@ class ScreenshotOverlay(QWidget):
         if not window:
             return
 
-        # Create original window rectangle (full window bounds)
-        original_window_rect = QRect(window.x, window.y, window.width, window.height)
+        # Use captured window geometry if available (content-only, borders excluded)
+        # Otherwise fall back to window info geometry (full window with borders)
+        if window.window_id in self.captured_windows:
+            original_window_rect = self.captured_windows[window.window_id].geometry
+        else:
+            # Fallback: use full window bounds
+            original_window_rect = QRect(window.x, window.y, window.width, window.height)
 
         # Calculate visible portion within screen bounds
         screen_rect = self.rect()

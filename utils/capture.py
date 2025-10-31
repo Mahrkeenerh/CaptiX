@@ -520,7 +520,7 @@ class ScreenCapture:
 
     def capture_window_pure_content(
         self, window_id: int, include_cursor: bool = True
-    ) -> Optional[Image.Image]:
+    ) -> Optional[tuple]:
         """
         Capture pure window content using XComposite extension.
         This captures the window's off-screen buffer, avoiding any overlapping elements.
@@ -530,7 +530,7 @@ class ScreenCapture:
             include_cursor: Whether to include the cursor in the capture
 
         Returns:
-            PIL Image object or None if capture failed
+            Tuple of (PIL Image, left_border, top_border) or None if capture failed
         """
         if not self.xcomposite:
             raise RuntimeError(
@@ -570,10 +570,13 @@ class ScreenCapture:
 
     def _capture_window_direct(
         self, window_info: WindowInfo, include_cursor: bool
-    ) -> Optional[Image.Image]:
+    ) -> Optional[tuple]:
         """
         Direct window content capture using Xlib with proper window handling.
         This bypasses compositor issues by directly accessing the window drawable.
+
+        Returns:
+            Tuple of (PIL Image, left_border, top_border) or None if capture failed
         """
         try:
             # Create window object from the window ID
@@ -588,27 +591,57 @@ class ScreenCapture:
 
             # Get window geometry to ensure we have correct dimensions
             geom = window_obj.get_geometry()
-            actual_width = geom.width
-            actual_height = geom.height
+            full_width = geom.width
+            full_height = geom.height
 
-            logger.debug(f"Window geometry: {actual_width}x{actual_height}")
+            logger.debug(f"Window geometry: {full_width}x{full_height}")
+
+            # Get frame extents (including invisible GTK borders/shadows)
+            left_border, right_border, top_border, bottom_border = (
+                self.window_detector.get_window_frame_extents(window_obj)
+            )
+
+            logger.debug(
+                f"Frame extents: left={left_border}, right={right_border}, "
+                f"top={top_border}, bottom={bottom_border}"
+            )
+
+            # Calculate content-only geometry
+            content_x = left_border
+            content_y = top_border
+            content_width = full_width - left_border - right_border
+            content_height = full_height - top_border - bottom_border
+
+            # Ensure content dimensions are valid
+            if content_width <= 0 or content_height <= 0:
+                logger.warning(
+                    f"Invalid content dimensions: {content_width}x{content_height}, "
+                    "falling back to full window"
+                )
+                content_x = 0
+                content_y = 0
+                content_width = full_width
+                content_height = full_height
+                left_border = right_border = top_border = bottom_border = 0
+
+            logger.debug(f"Content geometry: {content_width}x{content_height} at ({content_x}, {content_y})")
 
             # Ensure window is mapped and visible
             if attrs.map_state != X.IsViewable:
                 logger.warning("Window is not currently viewable")
 
-            # Capture the window content directly
+            # Capture the window content directly (excluding borders)
             try:
-                # Try to get the image directly from the window
+                # Capture only the content area, excluding invisible borders
                 raw_image = window_obj.get_image(
-                    0, 0, actual_width, actual_height, X.ZPixmap, 0xFFFFFFFF
+                    content_x, content_y, content_width, content_height, X.ZPixmap, 0xFFFFFFFF
                 )
 
-                # Convert to PIL Image
+                # Convert to PIL Image using content dimensions
                 if raw_image.depth == 24:
                     pil_image = Image.frombytes(
                         "RGB",
-                        (actual_width, actual_height),
+                        (content_width, content_height),
                         raw_image.data,
                         "raw",
                         "BGRX",
@@ -616,7 +649,7 @@ class ScreenCapture:
                 elif raw_image.depth == 32:
                     pil_image = Image.frombytes(
                         "RGBA",
-                        (actual_width, actual_height),
+                        (content_width, content_height),
                         raw_image.data,
                         "raw",
                         "BGRA",
@@ -625,7 +658,7 @@ class ScreenCapture:
                     # 16-bit color
                     pil_image = Image.frombytes(
                         "RGB",
-                        (actual_width, actual_height),
+                        (content_width, content_height),
                         raw_image.data,
                         "raw",
                         "BGR;16",
@@ -633,14 +666,17 @@ class ScreenCapture:
                 else:
                     raise RuntimeError(f"Unsupported color depth: {raw_image.depth}")
 
-                # Include cursor if requested
+                # Include cursor if requested (with border adjustment)
                 if include_cursor:
-                    pil_image = self._add_cursor_to_pure_window(pil_image, window_info)
+                    pil_image = self._add_cursor_to_pure_window_with_borders(
+                        pil_image, window_info, left_border, top_border
+                    )
 
                 logger.info(
-                    f"Successfully captured pure window content: {actual_width}x{actual_height}"
+                    f"Successfully captured pure window content: {content_width}x{content_height} "
+                    f"(excluding borders: L={left_border}, R={right_border}, T={top_border}, B={bottom_border})"
                 )
-                return pil_image
+                return (pil_image, left_border, top_border)
 
             except Exception as inner_e:
                 # If direct window capture fails, try using the parent window or root window approach
@@ -761,6 +797,86 @@ class ScreenCapture:
 
         except Exception as e:
             logger.error(f"Failed to add cursor to pure window: {e}")
+
+        return image
+
+    def _add_cursor_to_pure_window_with_borders(
+        self, image: Image.Image, window_info: WindowInfo, left_border: int, top_border: int
+    ) -> Image.Image:
+        """
+        Add cursor to pure window capture accounting for excluded borders.
+
+        When capturing content-only (excluding invisible borders), cursor coordinates
+        must be adjusted to account for the excluded border areas.
+
+        Args:
+            image: The captured window image (content-only, borders excluded)
+            window_info: Information about the captured window (full geometry including borders)
+            left_border: Left border size that was excluded from capture
+            top_border: Top border size that was excluded from capture
+
+        Returns:
+            Image with cursor overlaid if cursor is within content area
+        """
+        try:
+            if not self.xfixes_cursor:
+                return image
+
+            # Get the actual cursor image using XFixes
+            cursor_image = self.xfixes_cursor.get_cursor_image()
+
+            if cursor_image and cursor_image.width > 0 and cursor_image.height > 0:
+                # Get cursor position in screen coordinates
+                cursor_screen_x = cursor_image.x
+                cursor_screen_y = cursor_image.y
+
+                # Convert to window-relative coordinates (full window including borders)
+                cursor_window_x = cursor_screen_x - window_info.x
+                cursor_window_y = cursor_screen_y - window_info.y
+
+                # Adjust for excluded borders to get content-relative coordinates
+                cursor_content_x = cursor_window_x - left_border
+                cursor_content_y = cursor_window_y - top_border
+
+                # Get content dimensions (image is already content-only)
+                content_width = image.width
+                content_height = image.height
+
+                # Check if cursor is within the content bounds
+                if (
+                    0 <= cursor_content_x < content_width
+                    and 0 <= cursor_content_y < content_height
+                ):
+                    # Convert cursor data to PIL Image
+                    cursor_pil = self._convert_cursor_to_pil(cursor_image)
+
+                    if cursor_pil:
+                        # Calculate hotspot position relative to content area
+                        hotspot_x = cursor_content_x - cursor_image.xhot
+                        hotspot_y = cursor_content_y - cursor_image.yhot
+
+                        # Ensure we don't paste outside content bounds
+                        if (
+                            hotspot_x + cursor_image.width > 0
+                            and hotspot_y + cursor_image.height > 0
+                            and hotspot_x < content_width
+                            and hotspot_y < content_height
+                        ):
+                            # Paste cursor onto the content image
+                            if cursor_pil.mode == "RGBA":
+                                image.paste(
+                                    cursor_pil, (hotspot_x, hotspot_y), cursor_pil
+                                )
+                            else:
+                                image.paste(cursor_pil, (hotspot_x, hotspot_y))
+
+                            logger.debug(
+                                f"Added cursor to content area at ({hotspot_x}, {hotspot_y}) "
+                                f"(adjusted for borders: L={left_border}, T={top_border})"
+                            )
+
+        except Exception as e:
+            logger.error(f"Failed to add cursor to content area: {e}")
 
         return image
 
