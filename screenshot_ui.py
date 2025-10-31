@@ -27,6 +27,7 @@ Next blocks:
 import sys
 import logging
 import time
+import threading
 from typing import Optional, Dict
 from dataclasses import dataclass
 from PyQt6.QtWidgets import QApplication, QWidget
@@ -37,6 +38,7 @@ from PyQt6.QtCore import (
     QEasingCurve,
     pyqtProperty,
     QPoint,
+    pyqtSignal,
 )
 from PyQt6.QtGui import (
     QKeyEvent,
@@ -91,7 +93,10 @@ class CapturedWindow:
 
 class ScreenshotOverlay(QWidget):
     """Full-screen transparent overlay for screenshot selection."""
-    
+
+    # Signal emitted when captures are complete
+    captures_complete = pyqtSignal()
+
     def __init__(self):
         super().__init__()
         self.frozen_screen: Optional[QPixmap] = None
@@ -145,16 +150,17 @@ class ScreenshotOverlay(QWidget):
         # Initialize window detection BEFORE screen capture for proper filtering
         self.setup_window_detection()
 
-        # Now capture screen with filtering enabled
-        self.capture_frozen_screen()
+        # Setup geometry and animation before captures for instant display
         self.setup_geometry()
         self.setup_animation()
         self.setup_magnifier()
 
-        # Start the fade-in animation immediately after setup - runs concurrently with window display
-        if self.fade_animation:
-            self.fade_animation.start()
-            logger.info("Fade-in animation started (concurrent with display)")
+        # Defer screen captures - will be done after window is shown
+        self._captures_complete = False
+        self._capture_lock = threading.Lock()
+
+        # Connect signal for thread-safe capture completion
+        self.captures_complete.connect(self._on_captures_complete)
 
     def setup_window(self):
         """Configure the overlay window properties."""
@@ -179,6 +185,9 @@ class ScreenshotOverlay(QWidget):
 
         # Set window title for debugging
         self.setWindowTitle("CaptiX Screenshot Overlay")
+
+        # Start with window opacity at 0 for fade-in effect
+        self.setWindowOpacity(0.0)
 
         logger.info("Overlay window configured")
 
@@ -412,15 +421,18 @@ class ScreenshotOverlay(QWidget):
             logger.error("No screens found")
 
     def setup_animation(self):
-        """Set up the fade-in animation for the dark overlay."""
-        # Create animation for the overlay opacity
-        self.fade_animation = QPropertyAnimation(self, b"overlay_opacity")
+        """Set up the fade-in animation for the window and dark overlay."""
+        # Create animation for the window opacity (entire window fades in)
+        self.fade_animation = QPropertyAnimation(self, b"windowOpacity")
         self.fade_animation.setDuration(250)  # 0.25 seconds
         self.fade_animation.setStartValue(0.0)  # Start transparent
-        self.fade_animation.setEndValue(0.5)  # End at 50% opacity
+        self.fade_animation.setEndValue(1.0)  # End fully visible
         self.fade_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
 
-        logger.info("Fade animation configured (0.25s, 0% to 50%)")
+        # Set the dark overlay to target opacity immediately (no separate animation)
+        self._overlay_opacity = 0.5
+
+        logger.info("Fade animation configured (0.25s, window opacity 0% to 100%)")
 
     def setup_window_detection(self):
         """Initialize window detection system."""
@@ -1129,7 +1141,34 @@ class ScreenshotOverlay(QWidget):
         self.activateWindow()
         self.raise_()
 
+        # Start the fade-in animation now that the window is visible
+        if self.fade_animation and self.fade_animation.state() != QPropertyAnimation.State.Running:
+            self.fade_animation.start()
+            logger.info("Fade-in animation started")
+
+        # Perform screen captures after window is shown (in parallel thread)
+        if not self._captures_complete:
+            capture_thread = threading.Thread(target=self._do_captures, daemon=True)
+            capture_thread.start()
+            logger.info("Started background capture thread")
+
         logger.info("Overlay window shown and focused")
+
+    def _do_captures(self):
+        """Perform screen and window captures in background thread."""
+        try:
+            with self._capture_lock:
+                self.capture_frozen_screen()
+                self._captures_complete = True
+            # Signal completion (thread-safe)
+            self.captures_complete.emit()
+        except Exception as e:
+            logger.error(f"Error in background capture thread: {e}")
+
+    def _on_captures_complete(self):
+        """Handle capture completion in main thread."""
+        logger.info("Background captures complete, updating display")
+        self.update()  # Force repaint with captured content
         
     def closeEvent(self, event):
         """Handle window close event."""

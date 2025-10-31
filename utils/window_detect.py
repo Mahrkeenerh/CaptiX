@@ -693,16 +693,25 @@ class WindowDetector:
                 if self.is_window_minimized(window_obj):
                     continue
 
+                # Skip tiny windows (1x1 system windows)
+                if window_info.width <= 1 or window_info.height <= 1:
+                    logger.debug(
+                        f"Skipping tiny window {window_info.title}: {window_info.width}x{window_info.height}"
+                    )
+                    continue
+
                 # Check workspace if available
                 if current_workspace is not None:
                     window_workspace = self.get_window_workspace(window_obj)
                     if window_workspace is not None:
-                        # Include if on current workspace or on all workspaces (-1)
-                        if (
-                            window_workspace != current_workspace
-                            and window_workspace != -1
-                        ):
+                        # Only include windows on current workspace (exclude sticky windows on all workspaces)
+                        # Note: window_workspace can be -1 (0xFFFFFFFF) for sticky windows
+                        if window_workspace != current_workspace:
+                            logger.debug(
+                                f"Skipping window {window_info.title}: workspace {window_workspace} != current {current_workspace}"
+                            )
                             continue
+                    # If window_workspace is None, include the window (no workspace info available)
 
                 # Window passed all filters
                 filtered_windows.append(window_info)
