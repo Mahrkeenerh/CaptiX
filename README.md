@@ -20,7 +20,7 @@ This entire application was vibe-coded with Claude. I take no responsibility for
 
 ## Current Status
 
-**Phase 4 Complete + Hotkey System** - Fully functional screenshot tool with global hotkey support
+**Phase 8 Complete** - Fully functional screenshot tool with notifications and sound feedback
 
 ✅ Working Features:
 - **Global hotkey (Ctrl+Shift+X)** - Trigger screenshots from anywhere via GNOME shortcuts
@@ -33,11 +33,11 @@ This entire application was vibe-coded with Claude. I take no responsibility for
 - Native cursor capture using XFixes extension
 - Workspace filtering and concurrent window capture
 - Automatic installation with keyboard shortcut registration
+- Desktop notifications with sound and clickable folder opening
 
 🚧 Planned Features:
 - Phase 6: Video recording with FFmpeg
 - Phase 7: Recording control panel and daemon (for video recording state)
-- Phase 8: Desktop notifications
 
 ## System Requirements
 

@@ -54,6 +54,7 @@ from utils.capture import ScreenCapture, list_visible_windows
 from utils.clipboard import copy_image_to_clipboard
 from utils.window_detect import WindowDetector, WindowInfo
 from utils.magnifier import MagnifierWidget
+from utils.notifications import notify_screenshot_saved
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG)  # Enable debug logging
@@ -727,6 +728,11 @@ class ScreenshotOverlay(QWidget):
                                 logger.warning(
                                     "Failed to copy window capture to clipboard"
                                 )
+                            # Show notification with sound
+                            try:
+                                notify_screenshot_saved(filepath, file_size)
+                            except Exception as e:
+                                logger.warning(f"Failed to show notification: {e}")
                         except Exception as e:
                             logger.error(f"Failed to save window capture: {e}")
                     else:
@@ -763,6 +769,11 @@ class ScreenshotOverlay(QWidget):
                     logger.info(f"Full desktop capture completed ({file_size} bytes)")
                 else:
                     logger.warning("Failed to copy desktop capture to clipboard")
+                # Show notification with sound
+                try:
+                    notify_screenshot_saved(filepath, file_size)
+                except Exception as e:
+                    logger.warning(f"Failed to show notification: {e}")
             except Exception as e:
                 logger.error(f"Failed to save desktop capture: {e}")
         else:
@@ -812,6 +823,11 @@ class ScreenshotOverlay(QWidget):
                         )
                     else:
                         logger.warning("Failed to copy area capture to clipboard")
+                    # Show notification with sound
+                    try:
+                        notify_screenshot_saved(filepath, file_size)
+                    except Exception as e:
+                        logger.warning(f"Failed to show notification: {e}")
                 except Exception as e:
                     logger.error(f"Failed to process area capture: {e}")
             else:

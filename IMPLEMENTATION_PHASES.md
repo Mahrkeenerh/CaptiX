@@ -352,7 +352,7 @@ This document outlines the development phases for CaptiX, a fast screenshot and 
 
 ---
 
-## Phase 8: Notifications & Polish
+## Phase 8: Notifications & Polish ✅
 
 ### Goals
 - Add desktop notifications
@@ -360,28 +360,38 @@ This document outlines the development phases for CaptiX, a fast screenshot and 
 - Final testing and bug fixes
 
 ### Tasks
-1. **Desktop Notifications** (`utils/notifications.py`)
-   - Install notify2 or use DBus directly
-   - Desktop notifications (notify-send/DBus)
-   - Screenshot saved notifications with file size
-   - Recording completion notifications with duration/size
+1. **Desktop Notifications** (`utils/notifications.py`) ✅
+   - GObject Notify integration for native D-Bus notifications
+   - Desktop notifications with clickable "Open Folder" action
+   - Screenshot saved notifications with file size and path
+   - Recording completion notifications with duration/size (ready for Phase 6)
+   - Sound feedback using system sound themes (camera-shutter, complete)
 
-2. **Notification Integration**
-   - Add notifications to screenshot workflow
-   - Add notifications to video recording workflow
-   - Error notifications for failures
-   - Actual file size reporting
+2. **Notification Integration** ✅
+   - Added notifications to all screenshot capture functions
+   - Integrated into screenshot_ui.py for all capture modes (window, desktop, area)
+   - Added notifications to capture.py API functions
+   - Error notifications ready for implementation
+   - Actual file size reporting in human-readable format
 
 3. **UI Polish & Bug Fixes**
-   - Smooth overlay transitions
-   - Better error messages
-   - Handle edge cases
+   - Notification system with fallback to simple notify-send
+   - Clickable notifications that open Screenshots folder
+   - Sound playback with multiple backend support (paplay, canberra-gtk-play)
    - Final testing across different setups
 
+### Implementation Details
+- **Notification System**: Uses GObject Notify library for native D-Bus notifications
+- **Clickable Actions**: Subprocess-based GLib.MainLoop for reliable action handling
+- **Sound Support**: System sound themes with fallback mechanisms
+- **File Path Display**: Shows full path in notification for easy navigation
+- **Folder Opening**: Click "Open Folder" button to open file manager at screenshot location
+
 ### Deliverables
-- Complete notification system
-- Polished user experience
-- Stable application ready for use
+- Complete notification system with clickable actions ✅
+- Sound feedback for screenshot captures ✅
+- Polished user experience ✅
+- Stable application ready for use ✅
 
 ---
 

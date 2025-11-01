@@ -144,11 +144,17 @@ Tracks implementation progress through all development phases.
 
 ---
 
-## Phase 8: Notifications & Polish - PLANNED
+## Phase 8: Notifications & Polish ✅
 
-**Goals:**
-- Desktop notifications with file sizes
-- UI polish and comprehensive testing
+**Date:** November 1, 2025
+
+**Completed:**
+- Desktop notifications with file size and path display
+- Clickable "Open Folder" action using GObject Notify
+- Sound feedback with system themes (camera-shutter.oga)
+- Integrated into all screenshot capture modes
+- Subprocess-based notification for reliable action handling
+- Fallback to simple notify-send when needed
 
 ---
 

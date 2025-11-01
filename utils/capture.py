@@ -26,6 +26,8 @@ import logging
 from .clipboard import copy_image_to_clipboard
 # Import window detection functionality
 from .window_detect import WindowDetector, WindowInfo
+# Import notification functionality
+from .notifications import notify_screenshot_saved
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -1056,6 +1058,7 @@ def capture_screenshot(
     save_path: str = None,
     include_cursor: bool = True,
     copy_to_clipboard: bool = True,
+    show_notification: bool = True,
 ) -> Tuple[str, int]:
     """
     Convenient function to capture a screenshot.
@@ -1065,12 +1068,13 @@ def capture_screenshot(
         save_path: Where to save (None for default location)
         include_cursor: Whether to include cursor
         copy_to_clipboard: Whether to copy to clipboard (default: True)
+        show_notification: Whether to show desktop notification (default: True)
 
     Returns:
         Tuple of (filepath, file_size_bytes)
     """
     capture = ScreenCapture()
-    
+
     try:
         if x is not None and y is not None and width is not None and height is not None:
             # Capture specific area
@@ -1078,7 +1082,7 @@ def capture_screenshot(
         else:
             # Capture full screen
             image = capture.capture_full_screen(include_cursor)
-        
+
         if image is None:
             raise RuntimeError("Failed to capture screen")
 
@@ -1101,8 +1105,15 @@ def capture_screenshot(
             except Exception as e:
                 logger.warning(f"Clipboard copy failed: {e}")
 
+        # Show notification if requested
+        if show_notification:
+            try:
+                notify_screenshot_saved(filepath, file_size)
+            except Exception as e:
+                logger.warning(f"Failed to show notification: {e}")
+
         return filepath, file_size
-        
+
     finally:
         capture.cleanup()
 
@@ -1113,6 +1124,7 @@ def capture_window_at_position(
     save_path: str = None,
     include_cursor: bool = True,
     copy_to_clipboard: bool = True,
+    show_notification: bool = True,
 ) -> Tuple[str, int]:
     """
     Capture the window at the specified coordinates.
@@ -1123,6 +1135,7 @@ def capture_window_at_position(
         save_path: Where to save (None for default location)
         include_cursor: Whether to include cursor
         copy_to_clipboard: Whether to copy to clipboard (default: True)
+        show_notification: Whether to show desktop notification (default: True)
 
     Returns:
         Tuple of (filepath, file_size_bytes)
@@ -1150,6 +1163,13 @@ def capture_window_at_position(
                     logger.warning("Failed to copy screenshot to clipboard")
             except Exception as e:
                 logger.warning(f"Clipboard copy failed: {e}")
+
+        # Show notification if requested
+        if show_notification:
+            try:
+                notify_screenshot_saved(filepath, file_size)
+            except Exception as e:
+                logger.warning(f"Failed to show notification: {e}")
 
         return filepath, file_size
 
@@ -1197,6 +1217,7 @@ def capture_window_at_position_pure(
     save_path: str = None,
     include_cursor: bool = True,
     copy_to_clipboard: bool = True,
+    show_notification: bool = True,
 ) -> Tuple[str, int]:
     """
     Capture pure window content at the specified coordinates using XComposite.
@@ -1208,6 +1229,7 @@ def capture_window_at_position_pure(
         save_path: Where to save (None for default location)
         include_cursor: Whether to include cursor
         copy_to_clipboard: Whether to copy to clipboard (default: True)
+        show_notification: Whether to show desktop notification (default: True)
 
     Returns:
         Tuple of (filepath, file_size_bytes)
@@ -1238,6 +1260,13 @@ def capture_window_at_position_pure(
             except Exception as e:
                 logger.warning(f"Clipboard copy failed: {e}")
 
+        # Show notification if requested
+        if show_notification:
+            try:
+                notify_screenshot_saved(filepath, file_size)
+            except Exception as e:
+                logger.warning(f"Failed to show notification: {e}")
+
         return filepath, file_size
 
     finally:
@@ -1249,6 +1278,7 @@ def capture_window_pure_content_by_id(
     save_path: str = None,
     include_cursor: bool = True,
     copy_to_clipboard: bool = True,
+    show_notification: bool = True,
 ) -> Tuple[str, int]:
     """
     Capture pure window content by window ID using XComposite.
@@ -1259,6 +1289,7 @@ def capture_window_pure_content_by_id(
         save_path: Where to save (None for default location)
         include_cursor: Whether to include cursor
         copy_to_clipboard: Whether to copy to clipboard (default: True)
+        show_notification: Whether to show desktop notification (default: True)
 
     Returns:
         Tuple of (filepath, file_size_bytes)
@@ -1288,6 +1319,13 @@ def capture_window_pure_content_by_id(
                     logger.warning("Failed to copy screenshot to clipboard")
             except Exception as e:
                 logger.warning(f"Clipboard copy failed: {e}")
+
+        # Show notification if requested
+        if show_notification:
+            try:
+                notify_screenshot_saved(filepath, file_size)
+            except Exception as e:
+                logger.warning(f"Failed to show notification: {e}")
 
         return filepath, file_size
 
