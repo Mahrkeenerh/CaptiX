@@ -140,7 +140,7 @@ class ScreenshotOverlay(QWidget):
 
         # Window preview mode toggle (Right-click feature)
         self.is_preview_mode_enabled: bool = (
-            True  # Default to True for bring-to-front preview
+            False  # Default to False - only show border highlight
         )
 
         # Magnifier widget state (Block 4.8)
@@ -193,14 +193,14 @@ class ScreenshotOverlay(QWidget):
         logger.info("Overlay window configured")
 
     def capture_frozen_screen(self):
-        """Capture the current screen state and all individual windows to use as frozen background."""
+        """Capture the current screen state to use as frozen background (immediate, not in thread)."""
         try:
-            logger.info("Capturing frozen screen background and all windows...")
+            logger.info("Capturing frozen screen background...")
 
             # Initialize capture system
             self.capture_system = ScreenCapture()
 
-            # Capture full screen with cursor
+            # Capture full screen with cursor (immediate)
             screen_image = self.capture_system.capture_full_screen(include_cursor=True)
 
             if screen_image:
@@ -229,9 +229,6 @@ class ScreenshotOverlay(QWidget):
                 self.frozen_screen = QPixmap.fromImage(qimage)
 
                 logger.info(f"Frozen screen captured: {width}x{height}")
-
-                # Now capture all individual windows (Block 4.6a enhancement)
-                self.capture_all_windows()
             else:
                 logger.error("Failed to capture screen for frozen background")
 
@@ -875,13 +872,8 @@ class ScreenshotOverlay(QWidget):
             if self.highlighted_window.window_id in self.captured_windows:
                 window_geometry = self.captured_windows[self.highlighted_window.window_id].geometry
             else:
-                # Fallback: use full window bounds
-                window_geometry = QRect(
-                    self.highlighted_window.x,
-                    self.highlighted_window.y,
-                    self.highlighted_window.width,
-                    self.highlighted_window.height,
-                )
+                # Calculate content-only geometry immediately using border detection
+                window_geometry = self._get_window_content_geometry(self.highlighted_window)
 
             # Calculate visible portion within screen bounds
             screen_rect = self.rect()
@@ -1004,12 +996,12 @@ class ScreenshotOverlay(QWidget):
             return
 
         # Use captured window geometry if available (content-only, borders excluded)
-        # Otherwise fall back to window info geometry (full window with borders)
+        # Otherwise calculate content-only geometry immediately using border detection
         if window.window_id in self.captured_windows:
             original_window_rect = self.captured_windows[window.window_id].geometry
         else:
-            # Fallback: use full window bounds
-            original_window_rect = QRect(window.x, window.y, window.width, window.height)
+            # Calculate content-only geometry immediately using border detection
+            original_window_rect = self._get_window_content_geometry(window)
 
         # Calculate visible portion within screen bounds
         screen_rect = self.rect()
@@ -1177,6 +1169,55 @@ class ScreenshotOverlay(QWidget):
             f"Selection dimensions displayed: {dimensions_text} at ({bg_x}, {bg_y})"
         )
 
+    def _get_window_content_geometry(self, window_info: WindowInfo) -> QRect:
+        """
+        Calculate the content-only geometry for a window by detecting and excluding borders.
+
+        This provides immediate border detection without waiting for window capture to complete.
+        Uses the same border detection logic as capture_window_pure_content.
+
+        Args:
+            window_info: WindowInfo object containing window details
+
+        Returns:
+            QRect representing the content area (borders excluded)
+        """
+        try:
+            # Get the window object for border detection
+            if self.window_detector:
+                window_obj = self.window_detector.display.create_resource_object(
+                    "window", window_info.window_id
+                )
+
+                # Detect border sizes using the same method as capture
+                left_border, right_border, top_border, bottom_border = (
+                    self.window_detector.get_window_frame_extents(window_obj)
+                )
+
+                # Calculate content-only geometry
+                content_x = window_info.x + left_border
+                content_y = window_info.y + top_border
+                content_width = window_info.width - left_border - right_border
+                content_height = window_info.height - top_border - bottom_border
+
+                # Ensure positive dimensions
+                content_width = max(1, content_width)
+                content_height = max(1, content_height)
+
+                logger.debug(
+                    f"Window content geometry calculated: borders L={left_border} R={right_border} "
+                    f"T={top_border} B={bottom_border}, content {content_width}x{content_height} "
+                    f"at ({content_x}, {content_y})"
+                )
+
+                return QRect(content_x, content_y, content_width, content_height)
+
+        except Exception as e:
+            logger.warning(f"Failed to calculate content geometry, using full window: {e}")
+
+        # Fallback: use full window bounds if border detection fails
+        return QRect(window_info.x, window_info.y, window_info.width, window_info.height)
+
     def showEvent(self, event):
         """Handle window show event."""
         super().showEvent(event)
@@ -1186,29 +1227,39 @@ class ScreenshotOverlay(QWidget):
         self.activateWindow()
         self.raise_()
 
+        # Capture full screenshot IMMEDIATELY for instant display
+        if not self._captures_complete and not self.frozen_screen:
+            logger.info("Capturing full screenshot immediately...")
+            self.capture_frozen_screen()
+            # Trigger repaint to show frozen screen right away
+            self.update()
+            logger.info("Full screenshot captured, starting window captures in background")
+
         # Start the fade-in animation now that the window is visible
         if self.fade_animation and self.fade_animation.state() != QPropertyAnimation.State.Running:
             self.fade_animation.start()
             logger.info("Fade-in animation started")
 
-        # Perform screen captures after window is shown (in parallel thread)
+        # Capture windows in background thread (after full screenshot is done)
         if not self._captures_complete:
-            capture_thread = threading.Thread(target=self._do_captures, daemon=True)
+            capture_thread = threading.Thread(target=self._do_window_captures, daemon=True)
             capture_thread.start()
-            logger.info("Started background capture thread")
+            logger.info("Started background window capture thread")
 
         logger.info("Overlay window shown and focused")
 
-    def _do_captures(self):
-        """Perform screen and window captures in background thread."""
+    def _do_window_captures(self):
+        """Perform window captures in background thread (full screenshot already done)."""
         try:
             with self._capture_lock:
-                self.capture_frozen_screen()
+                # Full screenshot was already captured in showEvent
+                # Now capture individual windows
+                self.capture_all_windows()
                 self._captures_complete = True
             # Signal completion (thread-safe)
             self.captures_complete.emit()
         except Exception as e:
-            logger.error(f"Error in background capture thread: {e}")
+            logger.error(f"Error in background window capture thread: {e}")
 
     def _on_captures_complete(self):
         """Handle capture completion in main thread."""
