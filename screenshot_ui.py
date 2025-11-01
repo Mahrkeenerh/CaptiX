@@ -839,98 +839,127 @@ class ScreenshotOverlay(QWidget):
             painter.fillRect(self.rect(), QColor(128, 128, 128, 50))
             logger.warning("No frozen screen available, using fallback background")
 
-        # Draw the dark overlay layer with animated opacity, but not over selection area
+        # Draw the dark overlay layer with animated opacity, but not over selection area or highlighted window
         alpha_value = int(self._overlay_opacity * 255)
         dark_overlay_color = QColor(0, 0, 0, alpha_value)
 
+        # Determine exclusion rectangle (area to keep at normal brightness)
+        exclusion_rect = None
+
         if self.selection_rect and self.is_dragging:
-            # Draw dark overlay everywhere except selection area (Block 4.7)
+            # When dragging, exclude the selection area
+            exclusion_rect = self.selection_rect
+        elif (
+            self.highlighted_window
+            and not self.highlighted_window.is_root
+            and not self.is_dragging
+        ):
+            # When highlighting a window (and not dragging), exclude the window area
+            # Use captured window geometry if available (content-only, borders excluded)
+            if self.highlighted_window.window_id in self.captured_windows:
+                window_geometry = self.captured_windows[self.highlighted_window.window_id].geometry
+            else:
+                # Fallback: use full window bounds
+                window_geometry = QRect(
+                    self.highlighted_window.x,
+                    self.highlighted_window.y,
+                    self.highlighted_window.width,
+                    self.highlighted_window.height,
+                )
+
+            # Calculate visible portion within screen bounds
+            screen_rect = self.rect()
+            exclusion_rect = window_geometry.intersected(screen_rect)
+
+        if exclusion_rect and not exclusion_rect.isEmpty():
+            # Draw dark overlay everywhere except exclusion area
             screen_rect = self.rect()
 
-            # Create regions for areas outside selection
-            # Top area (above selection)
-            if self.selection_rect.top() > screen_rect.top():
+            # Create regions for areas outside exclusion
+            # Top area (above exclusion)
+            if exclusion_rect.top() > screen_rect.top():
                 top_rect = QRect(
                     screen_rect.left(),
                     screen_rect.top(),
                     screen_rect.width(),
-                    self.selection_rect.top() - screen_rect.top(),
+                    exclusion_rect.top() - screen_rect.top(),
                 )
                 painter.fillRect(top_rect, dark_overlay_color)
 
-            # Bottom area (below selection)
-            if self.selection_rect.bottom() < screen_rect.bottom():
+            # Bottom area (below exclusion)
+            if exclusion_rect.bottom() < screen_rect.bottom():
                 bottom_rect = QRect(
                     screen_rect.left(),
-                    self.selection_rect.bottom(),
+                    exclusion_rect.bottom(),
                     screen_rect.width(),
-                    screen_rect.bottom() - self.selection_rect.bottom(),
+                    screen_rect.bottom() - exclusion_rect.bottom(),
                 )
                 painter.fillRect(bottom_rect, dark_overlay_color)
 
-            # Left area (left of selection)
-            if self.selection_rect.left() > screen_rect.left():
+            # Left area (left of exclusion)
+            if exclusion_rect.left() > screen_rect.left():
                 left_rect = QRect(
                     screen_rect.left(),
-                    max(screen_rect.top(), self.selection_rect.top()),
-                    self.selection_rect.left() - screen_rect.left(),
-                    min(screen_rect.bottom(), self.selection_rect.bottom())
-                    - max(screen_rect.top(), self.selection_rect.top()),
+                    max(screen_rect.top(), exclusion_rect.top()),
+                    exclusion_rect.left() - screen_rect.left(),
+                    min(screen_rect.bottom(), exclusion_rect.bottom())
+                    - max(screen_rect.top(), exclusion_rect.top()),
                 )
                 painter.fillRect(left_rect, dark_overlay_color)
 
-            # Right area (right of selection)
-            if self.selection_rect.right() < screen_rect.right():
+            # Right area (right of exclusion)
+            if exclusion_rect.right() < screen_rect.right():
                 right_rect = QRect(
-                    self.selection_rect.right(),
-                    max(screen_rect.top(), self.selection_rect.top()),
-                    screen_rect.right() - self.selection_rect.right(),
-                    min(screen_rect.bottom(), self.selection_rect.bottom())
-                    - max(screen_rect.top(), self.selection_rect.top()),
+                    exclusion_rect.right(),
+                    max(screen_rect.top(), exclusion_rect.top()),
+                    screen_rect.right() - exclusion_rect.right(),
+                    min(screen_rect.bottom(), exclusion_rect.bottom())
+                    - max(screen_rect.top(), exclusion_rect.top()),
                 )
                 painter.fillRect(right_rect, dark_overlay_color)
 
-            # Draw selection border based on drag direction from origin point
-            pen = painter.pen()
-            pen.setColor(QColor(0, 150, 255, 200))  # Same blue as window highlight
-            pen.setWidth(2)  # 2px border
-            pen.setStyle(Qt.PenStyle.DashDotLine)  # Dash-dot style to match guidelines
-            painter.setPen(pen)
+            # Draw selection border if we're dragging (based on drag direction from origin point)
+            if self.selection_rect and self.is_dragging:
+                pen = painter.pen()
+                pen.setColor(QColor(0, 150, 255, 200))  # Same blue as window highlight
+                pen.setWidth(2)  # 2px border
+                pen.setStyle(Qt.PenStyle.DashDotLine)  # Dash-dot style to match guidelines
+                painter.setPen(pen)
 
-            # Get selection rectangle bounds
-            left = self.selection_rect.left()
-            right = self.selection_rect.right()
-            top = self.selection_rect.top()
-            bottom = self.selection_rect.bottom()
+                # Get selection rectangle bounds
+                left = self.selection_rect.left()
+                right = self.selection_rect.right()
+                top = self.selection_rect.top()
+                bottom = self.selection_rect.bottom()
 
-            # Get drag origin and current cursor position
-            origin_x, origin_y = self.press_position
-            cursor_x, cursor_y = self.cursor_x, self.cursor_y
+                # Get drag origin and current cursor position
+                origin_x, origin_y = self.press_position
+                cursor_x, cursor_y = self.cursor_x, self.cursor_y
 
-            # Determine drag direction and draw only relevant borders
-            # Draw bottom border if dragging upward (cursor above origin)
-            if cursor_y < origin_y:
-                painter.drawLine(left, bottom, right, bottom)
+                # Determine drag direction and draw only relevant borders
+                # Draw bottom border if dragging upward (cursor above origin)
+                if cursor_y < origin_y:
+                    painter.drawLine(left, bottom, right, bottom)
 
-            # Draw top border if dragging downward (cursor below origin)
-            if cursor_y > origin_y:
-                painter.drawLine(left, top, right, top)
+                # Draw top border if dragging downward (cursor below origin)
+                if cursor_y > origin_y:
+                    painter.drawLine(left, top, right, top)
 
-            # Draw right border if dragging leftward (cursor left of origin)
-            if cursor_x < origin_x:
-                painter.drawLine(right, top, right, bottom)
+                # Draw right border if dragging leftward (cursor left of origin)
+                if cursor_x < origin_x:
+                    painter.drawLine(right, top, right, bottom)
 
-            # Draw left border if dragging rightward (cursor right of origin)
-            if cursor_x > origin_x:
-                painter.drawLine(left, top, left, bottom)
+                # Draw left border if dragging rightward (cursor right of origin)
+                if cursor_x > origin_x:
+                    painter.drawLine(left, top, left, bottom)
 
-            # Draw selection dimensions display (Phase 4.10)
-            self.draw_selection_dimensions(painter)
+                # Draw selection dimensions display (Phase 4.10)
+                self.draw_selection_dimensions(painter)
 
-            logger.debug(
-                f"Selection rectangle drawn: {self.selection_rect.width()}x{self.selection_rect.height()} "
-                f"at ({self.selection_rect.x()}, {self.selection_rect.y()})"
-            )
+                logger.debug(
+                    f"Selection rectangle drawn: {self.selection_rect.width()}x{self.selection_rect.height()} "
+                    f"at ({self.selection_rect.x()}, {self.selection_rect.y()})"
+                )
         else:
             # No selection - draw dark overlay over entire screen
             painter.fillRect(self.rect(), dark_overlay_color)
