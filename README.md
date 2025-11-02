@@ -130,6 +130,22 @@ When the overlay appears:
 - Selection dimensions (Width × Height) shown in bottom-right corner
 - Crosshair guidelines for precise alignment
 
+### Emergency Exit Failsafes
+
+CaptiX includes failsafe mechanisms to prevent you from getting stuck if the overlay hangs:
+
+1. **External Watchdog** - Separate process monitors for complete freezes and force-kills after 5 seconds
+2. **Thread Watchdog** - Background operations timeout after 5 seconds (automatic)
+
+**Normal exit:** Press Escape to close the overlay normally.
+
+**Last resort (if all failsafes fail):**
+If everything fails and you're stuck with a frozen overlay:
+1. Press `Ctrl+Alt+F3` to switch to text console
+2. Login with your credentials
+3. Run: `pkill -9 captix-screenshot-ui`
+4. Press `Ctrl+Alt+F1` or `Ctrl+Alt+F2` to return to your desktop
+
 ### File Output
 
 Screenshots are automatically saved to:

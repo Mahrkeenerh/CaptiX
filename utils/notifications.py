@@ -361,3 +361,36 @@ def notify_recording_aborted():
 def notify_error(title: str, message: str):
     """Show error notification."""
     get_notification_system().notify_error(title, message)
+
+
+def send_notification(title: str, message: str, urgency: str = "normal", icon: str = "dialog-information"):
+    """
+    Send a generic desktop notification.
+
+    Args:
+        title: Notification title
+        message: Notification message body
+        urgency: Urgency level ("low", "normal", or "critical")
+        icon: Icon name to display
+    """
+    notification_system = get_notification_system()
+    if not notification_system.notification_available:
+        logger.warning(f"Notification not available: {title} - {message}")
+        return
+
+    try:
+        subprocess.Popen(
+            [
+                "notify-send",
+                "-i", icon,
+                "-u", urgency,
+                "-t", "5000",
+                "-a", "CaptiX",
+                title,
+                message,
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except Exception as e:
+        logger.error(f"Failed to send notification: {e}")

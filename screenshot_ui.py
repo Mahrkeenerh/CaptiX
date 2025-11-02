@@ -22,9 +22,14 @@ Previous blocks completed:
 Next blocks:
 - Block 4.11: Capture Integration & Polish
 - Block 4.12: Window Background Post-Processing
+
+FAILSAFE MECHANISMS (Anti-hang protection):
+1. External Watchdog - Separate process force-kills after 5s if frozen
+2. Thread Watchdog - Background thread timeout after 5 seconds
 """
 
 import sys
+import os
 import logging
 import time
 import threading
@@ -39,6 +44,7 @@ from PyQt6.QtCore import (
     pyqtProperty,
     QPoint,
     pyqtSignal,
+    QTimer,
 )
 from PyQt6.QtGui import (
     QKeyEvent,
@@ -54,11 +60,16 @@ from utils.capture import ScreenCapture, list_visible_windows
 from utils.clipboard import copy_image_to_clipboard
 from utils.window_detect import WindowDetector, WindowInfo
 from utils.magnifier import MagnifierWidget
-from utils.notifications import notify_screenshot_saved
+from utils.notifications import notify_screenshot_saved, send_notification
+from utils.external_watchdog import ExternalWatchdog
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG)  # Enable debug logging
 logger = logging.getLogger(__name__)
+
+# Failsafe configuration
+FAILSAFE_WATCHDOG_TIMEOUT_SECONDS = 5  # External watchdog timeout for complete freezes
+FAILSAFE_THREAD_TIMEOUT_SECONDS = 5  # Max time for background thread operations
 
 
 @dataclass
@@ -146,6 +157,14 @@ class ScreenshotOverlay(QWidget):
         # Magnifier widget state (Block 4.8)
         self.magnifier: Optional[MagnifierWidget] = None
 
+        # Failsafe timers
+        self.thread_watchdog_timer: Optional[QTimer] = None
+        self.thread_start_time: Optional[float] = None
+        self.heartbeat_timer: Optional[QTimer] = None  # For external watchdog
+
+        # External watchdog (works even if Qt event loop freezes)
+        self.external_watchdog: Optional[ExternalWatchdog] = None
+
         self.setup_window()
 
         # Initialize window detection BEFORE screen capture for proper filtering
@@ -155,6 +174,7 @@ class ScreenshotOverlay(QWidget):
         self.setup_geometry()
         self.setup_animation()
         self.setup_magnifier()
+        self.setup_failsafe_timers()
 
         # Defer screen captures - will be done after window is shown
         self._captures_complete = False
@@ -454,6 +474,88 @@ class ScreenshotOverlay(QWidget):
         except Exception as e:
             logger.error(f"Failed to initialize magnifier widget: {e}")
             self.magnifier = None
+
+    def setup_failsafe_timers(self):
+        """Initialize all failsafe timers and watchdogs."""
+        # Thread watchdog timer - monitors background thread execution
+        self.thread_watchdog_timer = QTimer(self)
+        self.thread_watchdog_timer.timeout.connect(self._on_thread_watchdog)
+        self.thread_watchdog_timer.start(1000)  # Check every second
+        logger.info(f"Thread watchdog failsafe enabled: {FAILSAFE_THREAD_TIMEOUT_SECONDS}s max thread time")
+
+        # External watchdog - CRITICAL: This works even if Qt event loop freezes
+        try:
+            self.external_watchdog = ExternalWatchdog(timeout_seconds=FAILSAFE_WATCHDOG_TIMEOUT_SECONDS)
+            self.external_watchdog.start_watchdog(pid_to_monitor=os.getpid())
+
+            # Heartbeat timer - updates external watchdog that we're still alive
+            self.heartbeat_timer = QTimer(self)
+            self.heartbeat_timer.timeout.connect(self._update_external_watchdog_heartbeat)
+            self.heartbeat_timer.start(1000)  # Update every 1 second
+            logger.info(f"External watchdog failsafe enabled: {FAILSAFE_WATCHDOG_TIMEOUT_SECONDS}s freeze detection")
+        except Exception as e:
+            logger.error(f"Failed to start external watchdog: {e}")
+
+    def _update_external_watchdog_heartbeat(self):
+        """Update the external watchdog heartbeat to signal we're still responsive."""
+        if self.external_watchdog:
+            try:
+                self.external_watchdog.update_heartbeat()
+            except Exception as e:
+                logger.warning(f"Failed to update watchdog heartbeat: {e}")
+
+    def _on_thread_watchdog(self):
+        """Monitor background thread and force exit if it hangs."""
+        if self.thread_start_time is not None and not self._captures_complete:
+            elapsed = time.time() - self.thread_start_time
+            if elapsed >= FAILSAFE_THREAD_TIMEOUT_SECONDS:
+                logger.warning(
+                    f"FAILSAFE: Background thread timeout after {elapsed:.1f}s - forcing exit"
+                )
+                # Show notification
+                try:
+                    send_notification(
+                        "CaptiX Thread Timeout",
+                        "Screenshot overlay closed due to hung background operation",
+                        urgency="critical"
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to show thread timeout notification: {e}")
+                self._force_exit("Thread timeout")
+
+    def _force_exit(self, reason: str = "Emergency exit"):
+        """Force immediate exit of the overlay with cleanup."""
+        logger.warning(f"FORCE EXIT triggered: {reason}")
+        try:
+            # Stop all timers immediately
+            if self.auto_timeout_timer:
+                self.auto_timeout_timer.stop()
+            if self.thread_watchdog_timer:
+                self.thread_watchdog_timer.stop()
+            if self.fade_animation:
+                self.fade_animation.stop()
+
+            # Hide magnifier
+            if self.magnifier:
+                try:
+                    self.magnifier.hide_magnifier()
+                    self.magnifier.close()
+                except:
+                    pass
+
+            # Force close window
+            self.close()
+
+            # Quit application
+            app = QApplication.instance()
+            if app:
+                app.quit()
+
+        except Exception as e:
+            logger.error(f"Error during force exit: {e}")
+            # Last resort - call os._exit to terminate immediately
+            import os
+            os._exit(1)
 
     def update_window_highlight(self, x: int, y: int):
         """Update window highlighting based on cursor position."""
@@ -1242,9 +1344,11 @@ class ScreenshotOverlay(QWidget):
 
         # Capture windows in background thread (after full screenshot is done)
         if not self._captures_complete:
+            # Set thread start time for watchdog monitoring
+            self.thread_start_time = time.time()
             capture_thread = threading.Thread(target=self._do_window_captures, daemon=True)
             capture_thread.start()
-            logger.info("Started background window capture thread")
+            logger.info("Started background window capture thread with watchdog monitoring")
 
         logger.info("Overlay window shown and focused")
 
@@ -1256,10 +1360,14 @@ class ScreenshotOverlay(QWidget):
                 # Now capture individual windows
                 self.capture_all_windows()
                 self._captures_complete = True
+                # Clear thread start time to stop watchdog monitoring
+                self.thread_start_time = None
             # Signal completion (thread-safe)
             self.captures_complete.emit()
         except Exception as e:
             logger.error(f"Error in background window capture thread: {e}")
+            # Clear thread start time even on error
+            self.thread_start_time = None
 
     def _on_captures_complete(self):
         """Handle capture completion in main thread."""
@@ -1269,6 +1377,20 @@ class ScreenshotOverlay(QWidget):
     def closeEvent(self, event):
         """Handle window close event."""
         logger.info("Overlay window closing")
+
+        # Stop failsafe timers first
+        if self.thread_watchdog_timer:
+            self.thread_watchdog_timer.stop()
+            self.thread_watchdog_timer = None
+
+        if self.heartbeat_timer:
+            self.heartbeat_timer.stop()
+            self.heartbeat_timer = None
+
+        # Stop external watchdog
+        if self.external_watchdog:
+            self.external_watchdog.stop_watchdog()
+            self.external_watchdog = None
 
         # Stop and clean up animation
         if self.fade_animation:

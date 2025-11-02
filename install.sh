@@ -102,7 +102,7 @@ cat > "$BIN_DIR/captix" << EOF
 #!/bin/bash
 source "$VENV_DIR/bin/activate"
 cd "$SCRIPT_DIR"
-exec python3 main.py "\$@"
+exec python3 captix-screenshot-ui.py "\$@"
 EOF
 chmod +x "$BIN_DIR/captix"
 
