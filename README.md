@@ -45,6 +45,7 @@ This entire application was vibe-coded with Claude. I take no responsibility for
 - **Python 3.10+**
 - **PyQt6** (for interactive UI)
 - **xclip** (for clipboard operations)
+- **D-Bus** (for single-instance control, standard on all GNOME systems)
 
 **Verify your system:**
 ```bash
@@ -300,10 +301,12 @@ ls -ld ~/Pictures/Screenshots
 python-xlib>=0.33      # X11 screen capture and window detection
 Pillow>=10.0.0         # Image processing and PNG optimization
 PyQt6>=6.4.0          # Interactive UI framework
+dbus-python            # D-Bus integration for single-instance control
 ```
 
 **System Requirements:**
 - `xclip` - Clipboard operations
+- `dbus` - Session bus for single-instance management (standard on GNOME)
 - X11 with XComposite, XFixes, and RandR extensions
 - Python 3.10 or higher
 

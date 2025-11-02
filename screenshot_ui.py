@@ -1349,7 +1349,18 @@ class ScreenshotUI:
 
 def main():
     """Main entry point for screenshot UI."""
+    # Check if another instance is already running
+    from utils.single_instance import SingleInstanceManager
+
+    instance_manager = SingleInstanceManager()
+    if not instance_manager.acquire():
+        # Another instance is running - exit silently
+        logger.info("Another screenshot UI instance is already running, exiting")
+        return 0
+
+    # Keep instance_manager alive for the lifetime of the UI
     ui = ScreenshotUI()
+    ui.instance_manager = instance_manager
     return ui.run()
 
 
