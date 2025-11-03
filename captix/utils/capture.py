@@ -678,7 +678,7 @@ class ScreenCapture:
 
                 # Include cursor if requested (with border adjustment)
                 if include_cursor:
-                    pil_image = self._add_cursor_to_pure_window_with_borders(
+                    pil_image = self._add_cursor_to_window_capture(
                         pil_image, window_info, left_border, top_border
                     )
 
@@ -815,11 +815,11 @@ class ScreenCapture:
 
         return image
 
-    def _add_cursor_to_pure_window_with_borders(
+    def _add_cursor_to_window_capture(
         self, image: Image.Image, window_info: WindowInfo, left_border: int, top_border: int
     ) -> Image.Image:
         """
-        Add cursor to pure window capture accounting for excluded borders.
+        Add cursor to window capture accounting for excluded borders.
 
         When capturing content-only (excluding invisible borders), cursor coordinates
         must be adjusted to account for the excluded border areas.
@@ -1255,66 +1255,6 @@ def capture_window_at_position_pure(
         if image is None:
             raise RuntimeError(
                 f"Failed to capture pure window content at position ({x}, {y})"
-            )
-
-        # Save the screenshot
-        filepath, file_size = capture.save_screenshot(
-            image, save_path, capture_type="win"
-        )
-
-        # Copy to clipboard if requested
-        if copy_to_clipboard:
-            try:
-                if copy_image_to_clipboard(filepath):
-                    logger.info("Screenshot copied to clipboard")
-                else:
-                    logger.warning("Failed to copy screenshot to clipboard")
-            except Exception as e:
-                logger.warning(f"Clipboard copy failed: {e}")
-
-        # Show notification if requested
-        if show_notification:
-            try:
-                notify_screenshot_saved(filepath, file_size)
-            except Exception as e:
-                logger.warning(f"Failed to show notification: {e}")
-
-        return filepath, file_size
-
-    finally:
-        capture.cleanup()
-
-
-def capture_window_pure_content_by_id(
-    window_id: int,
-    save_path: str = None,
-    include_cursor: bool = True,
-    copy_to_clipboard: bool = True,
-    show_notification: bool = True,
-) -> Tuple[str, int]:
-    """
-    Capture pure window content by window ID using XComposite.
-    This captures only the window content without any overlapping elements.
-
-    Args:
-        window_id: X11 window ID
-        save_path: Where to save (None for default location)
-        include_cursor: Whether to include cursor
-        copy_to_clipboard: Whether to copy to clipboard (default: True)
-        show_notification: Whether to show desktop notification (default: True)
-
-    Returns:
-        Tuple of (filepath, file_size_bytes)
-    """
-    capture = ScreenCapture()
-
-    try:
-        # Capture pure window content
-        image = capture.capture_window_pure_content(window_id, include_cursor)
-
-        if image is None:
-            raise RuntimeError(
-                f"Failed to capture pure window content for window ID {window_id}"
             )
 
         # Save the screenshot

@@ -1,7 +1,7 @@
 # CaptiX Refactoring Progress
 
 **Last Updated:** 2025-11-03
-**Status:** Phase 5 Complete (Constants Extracted)
+**Status:** Phase 6 Complete (Methods Refactored)
 
 ---
 
@@ -288,9 +288,62 @@ except Exception as e:
 
 ---
 
-## Phase 6: Method Refactoring ⏸️ NOT STARTED
+## Phase 6: Method Refactoring ✅ COMPLETED
 
-All tasks pending.
+### 6.1 Split large paintEvent() method ✅
+**Status:** COMPLETED (154 lines → 22 lines)
+**File:** `captix/ui.py`
+**What was done:**
+- Extracted 5 helper methods from paintEvent():
+  - `_draw_frozen_background()` - Draw frozen screen or fallback
+  - `_calculate_exclusion_rect()` - Calculate area to exclude from overlay
+  - `_draw_overlay_around_exclusion()` - 4-region overlay drawing
+  - `_draw_selection_border()` - Directional border based on drag
+  - `_draw_dark_overlay_with_selection()` - Main overlay coordinator
+- paintEvent() reduced from 154 lines to 22 lines
+- Kept tightly coupled logic together (overlay + selection)
+- Maintains all existing helper methods (draw_window_highlight, draw_crosshair_guidelines, draw_selection_dimensions)
+
+**Why this approach:** Conservative extraction that respects tight coupling between overlay and selection logic. Exclusion rectangle calculated once and passed through methods to avoid duplication or awkward state management.
+
+**Impact:** Much cleaner main paint method, easier to understand control flow, no over-abstraction
+
+### 6.2 Improve overly long method names ✅
+**Status:** COMPLETED (2 changes)
+**File:** `captix/utils/capture.py`
+**What was done:**
+1. Renamed `_add_cursor_to_pure_window_with_borders()` → `_add_cursor_to_window_capture()` (45 chars → 29 chars)
+   - Definition at line 818
+   - Call site at line 681
+   - Still descriptive, more concise
+2. Deleted unused `capture_window_pure_content_by_id()` function (58 lines removed)
+   - Zero calls in entire codebase
+   - Dead code elimination
+
+**What was NOT changed:**
+- `get_window_at_position_excluding()` - Kept as-is (33 chars is fine, name is clear)
+- `_capture_window_with_background_subtraction()` - Already renamed in Phase 4 to `_capture_window_area_fallback()`
+
+**Impact:** Cleaner API, less dead code, better naming without sacrificing clarity
+
+### 6.3 Reduce cyclomatic complexity ✅
+**Status:** SKIPPED (NOT NEEDED)
+**Why skipped:**
+- paintEvent() complexity already addressed by Task 6.1 (extraction reduced main method to 22 lines)
+- draw_window_highlight() complexity is domain-inherent (geometry calculations, conditional rendering)
+- Current code is readable with good comments
+- Further extraction would create marginal benefit for code churn cost
+
+**Impact:** None (task not needed)
+
+**Phase 6 Summary:**
+- **Files Modified:** 2 (ui.py, capture.py)
+- **Lines Changed:** +122, -186 (net -64 lines, 30% reduction in modified sections)
+- **Methods Extracted:** 5 (new paint helpers)
+- **Methods Renamed:** 1 (clearer naming)
+- **Methods Deleted:** 1 (dead code)
+- **paintEvent() Size:** 154 lines → 22 lines (86% reduction)
+- **Testing:** ✅ Syntax validated, all helper methods properly integrated
 
 ---
 
@@ -328,6 +381,7 @@ All tasks pending.
 7. **Architecture is now clearer:** One entry point, one package, clear module separation
 8. **Exception handling philosophy:** File I/O = specific exceptions; X11/UI/subprocess = broad handling (intentional defensive programming)
 9. **Code deduplication lesson:** Always verify if "duplicates" serve different architectural purposes before consolidating
+10. **Phase 6 took conservative approach:** Split paintEvent() cleanly without over-abstraction; skipped unnecessary complexity reduction
 
 ---
 
@@ -340,3 +394,6 @@ All tasks pending.
 5. **Conservative error handling approach** - Rejected 90% of Phase 3 plan; only changed file I/O handlers, kept 97 X11/UI/subprocess handlers broad (correct defensive programming for unpredictable X11 behavior)
 6. **Renamed instead of "fixing" fallback** - The background subtraction method wasn't broken, just misleadingly named; fixed type bug and clarified intent rather than implementing complex algorithms or removing reliability
 7. **Preserved layer separation** - Kept coordinate calculation methods separate despite similar names; they serve different architectural layers (X11 vs UI)
+8. **Extracted paintEvent() conservatively** - Created 5 focused helpers that respect tight coupling between overlay and selection; avoided over-abstraction
+9. **Deleted dead code** - Removed unused `capture_window_pure_content_by_id()` after verification (zero references)
+10. **Skipped unnecessary task** - Task 6.3 complexity reduction not needed after Task 6.1 already addressed it
