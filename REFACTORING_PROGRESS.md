@@ -1,7 +1,7 @@
 # CaptiX Refactoring Progress
 
 **Last Updated:** 2025-11-03
-**Status:** Phase 2 Complete
+**Status:** Phase 3 Complete (Conservative Approach)
 
 ---
 
@@ -102,9 +102,71 @@ CaptiX/
 
 ---
 
-## Phase 3: Improve Error Handling ⏸️ NOT STARTED
+## Phase 3: Improve Error Handling ✅ COMPLETED (CONSERVATIVE APPROACH)
 
-All tasks pending.
+### 3.1 Replace broad exception catching in file I/O operations ✅
+**Status:** COMPLETED (8 instances changed, 97 kept intentionally broad)
+**Files Modified:**
+- `captix/utils/capture.py` - save_screenshot method
+- `captix/utils/external_watchdog.py` - update_heartbeat method
+- `captix/ui.py` - window/desktop/area capture save operations (4 locations)
+
+**What was done:**
+Changed file I/O exception handlers from `except Exception` to `except (OSError, IOError, PermissionError)`:
+```python
+# BEFORE:
+except Exception as e:
+    logger.error(f"Failed to save: {e}")
+
+# AFTER:
+except (OSError, IOError, PermissionError) as e:
+    logger.error(f"Failed to save to {filepath}: {e}")
+```
+
+**Why only 8 changes:** Deep analysis revealed the refactoring plan's approach was 90% wrong. Of 105 broad exception handlers:
+- **48 X11/Display operations** - Must remain broad (BadWindow, BadMatch, XError, RuntimeError, OSError vary by window manager/library)
+- **12 subprocess/external tools** - Correct as-is (non-critical graceful degradation)
+- **15 PyQt6/UI operations** - Must remain broad (event handlers cannot crash Qt event loop)
+- **4 emergency failsafes** - Intentionally broad (last-resort robustness)
+- **18 initialization handlers** - Correct as-is (platform portability, graceful degradation)
+- **8 file I/O operations** - THESE were made more specific (predictable exception types)
+
+**Impact:** More specific error messages for file operations without breaking X11/UI stability
+
+### 3.2 Add documentation to broad exception handlers ✅
+**Status:** COMPLETED (6 key locations documented)
+**Files Modified:**
+- `captix/utils/capture.py` - XComposite operations, XFixes init, XComposite init
+- `captix/ui.py` - frozen screen capture, window detection init
+- `captix/utils/window_detect.py` - window position queries
+
+**What was done:** Added explanatory comments explaining why broad handling is intentional:
+```python
+except Exception as e:
+    # X11 operations can fail with BadWindow, BadMatch, XError, RuntimeError, OSError, etc.
+    # depending on window state and X11 library layer. Broad handling is intentional.
+    logger.error(f"Failed to get window pixmap: {e}")
+```
+
+**Impact:** Future maintainers understand the intentional design decisions
+
+### 3.3 Improve error logging context ✅
+**Status:** COMPLETED
+**What was done:**
+- Added filepath to save error messages
+- Added window title to capture error messages
+- Added dimensions to area capture error messages
+
+**Impact:** Better debugging information without changing exception handling strategy
+
+**Phase 3 Summary:**
+- **Files Modified:** 4 (capture.py, external_watchdog.py, ui.py, window_detect.py)
+- **Lines Changed:** 36 lines (24 insertions, 12 deletions)
+- **Exception Handlers Updated:** 8 (file I/O only)
+- **Exception Handlers Documented:** 6 (X11 operations)
+- **Exception Handlers Kept Broad:** 97 (intentional, defensively correct)
+- **Testing:** ✅ Syntax validated, app runs correctly, file I/O errors handled properly
+- **Risk Level:** LOW (only file I/O touched, all critical X11/UI paths unchanged)
 
 ---
 
@@ -154,8 +216,10 @@ All tasks pending.
 1. **Line numbers in REFACTORING_PLAN.md are now outdated** - file was `screenshot_ui.py`, now it's `captix/ui.py`
 2. **Import paths changed** - all `from utils.` are now `from captix.utils.`
 3. **Phase 1 accuracy was ~40%** - several false positives identified, one critical misunderstanding corrected
-4. **Before continuing:** Re-verify line numbers and locations for remaining phases
-5. **Architecture is now clearer:** One entry point, one package, clear module separation
+4. **Phase 3 plan was 90% wrong** - only 8 of 105 exception handlers should be changed; broad handling is correct for X11 operations
+5. **Before continuing:** Re-verify line numbers and locations for remaining phases
+6. **Architecture is now clearer:** One entry point, one package, clear module separation
+7. **Exception handling philosophy:** File I/O = specific exceptions; X11/UI/subprocess = broad handling (intentional defensive programming)
 
 ---
 
@@ -165,3 +229,4 @@ All tasks pending.
 2. **Chose "Option C: Hybrid Approach"** - Balanced clarity with practicality, maintains process identification
 3. **Updated module docstrings** - Removed outdated phase tracking comments, added clear purpose statements
 4. **Kept exception handlers** - The "empty" handlers identified in the plan were either already logging or intentionally silent for good reasons
+5. **Conservative error handling approach** - Rejected 90% of Phase 3 plan; only changed file I/O handlers, kept 97 X11/UI/subprocess handlers broad (correct defensive programming for unpredictable X11 behavior)

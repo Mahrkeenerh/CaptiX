@@ -136,6 +136,8 @@ class XComposite:
 
             return pixmap if pixmap else None
         except Exception as e:
+            # X11 operations can fail with BadWindow, BadMatch, XError, RuntimeError, OSError, etc.
+            # depending on window state and X11 library layer. Broad handling is intentional.
             logger.error(f"Failed to get window pixmap: {e}")
             return None
 
@@ -236,6 +238,8 @@ class ScreenCapture:
         try:
             self.xfixes_cursor = XFixesCursor()
         except Exception as e:
+            # X11 extension initialization can fail for various reasons (not installed,
+            # permission denied, library mismatch). Graceful degradation is required.
             logger.warning(f"Failed to initialize XFixes cursor: {e}")
             self.xfixes_cursor = None
 
@@ -243,6 +247,8 @@ class ScreenCapture:
         try:
             self.xcomposite = XComposite()
         except Exception as e:
+            # XComposite extension may not be available on all systems.
+            # Screenshot functionality continues without window-specific features.
             logger.warning(f"Failed to initialize XComposite: {e}")
             self.xcomposite = None
 
@@ -1032,8 +1038,8 @@ class ScreenCapture:
             logger.info(f"Screenshot saved: {filepath} ({file_size} bytes)")
             return filepath, file_size
             
-        except Exception as e:
-            logger.error(f"Failed to save screenshot: {e}")
+        except (OSError, IOError, PermissionError) as e:
+            logger.error(f"Failed to save screenshot to {filepath}: {e}")
             raise
     
     def cleanup(self):

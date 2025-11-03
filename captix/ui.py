@@ -242,6 +242,8 @@ class ScreenshotOverlay(QWidget):
                 logger.error("Failed to capture screen for frozen background")
 
         except Exception as e:
+            # Screen capture via PyQt6/X11 can fail for various reasons (display issues,
+            # compositor problems, resource constraints). UI continues with degraded functionality.
             logger.error(f"Error capturing frozen screen: {e}")
             self.frozen_screen = None
             self.frozen_full_image = None
@@ -451,6 +453,8 @@ class ScreenshotOverlay(QWidget):
                 f"Window detection system initialized, overlay window ID: {self.overlay_window_id}"
             )
         except Exception as e:
+            # Window detection initialization can fail due to X11 errors, missing libraries,
+            # or incompatible window managers. App continues without window detection features.
             logger.error(f"Failed to initialize window detection: {e}")
             self.window_detector = None
             self.overlay_window_id = None
@@ -490,7 +494,7 @@ class ScreenshotOverlay(QWidget):
         if self.external_watchdog:
             try:
                 self.external_watchdog.update_heartbeat()
-            except Exception as e:
+            except (OSError, IOError) as e:
                 logger.warning(f"Failed to update watchdog heartbeat: {e}")
 
     def _on_thread_watchdog(self):
@@ -812,8 +816,8 @@ class ScreenshotOverlay(QWidget):
                                 notify_screenshot_saved(filepath, file_size)
                             except Exception as e:
                                 logger.warning(f"Failed to show notification: {e}")
-                        except Exception as e:
-                            logger.error(f"Failed to save window capture: {e}")
+                        except (OSError, IOError, PermissionError) as e:
+                            logger.error(f"Failed to save window capture for '{captured_window.window_info.title}': {e}")
                     else:
                         logger.warning(
                             f"No image available for window: {captured_window.window_info.title}"
@@ -853,7 +857,7 @@ class ScreenshotOverlay(QWidget):
                     notify_screenshot_saved(filepath, file_size)
                 except Exception as e:
                     logger.warning(f"Failed to show notification: {e}")
-            except Exception as e:
+            except (OSError, IOError, PermissionError) as e:
                 logger.error(f"Failed to save desktop capture: {e}")
         else:
             logger.error("No frozen desktop image available")
@@ -907,8 +911,8 @@ class ScreenshotOverlay(QWidget):
                         notify_screenshot_saved(filepath, file_size)
                     except Exception as e:
                         logger.warning(f"Failed to show notification: {e}")
-                except Exception as e:
-                    logger.error(f"Failed to process area capture: {e}")
+                except (OSError, IOError, PermissionError) as e:
+                    logger.error(f"Failed to save area capture ({width}x{height} pixels): {e}")
             else:
                 logger.error("No frozen desktop image available for area capture")
 

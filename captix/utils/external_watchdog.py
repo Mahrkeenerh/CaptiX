@@ -42,8 +42,8 @@ class ExternalWatchdog:
         """Update the heartbeat file to signal the watchdog we're still alive."""
         try:
             self.heartbeat_file.write_text(str(time.time()))
-        except Exception as e:
-            logger.warning(f"Failed to update heartbeat: {e}")
+        except (OSError, IOError) as e:
+            logger.warning(f"Failed to update heartbeat file {self.heartbeat_file}: {e}")
 
     def start_watchdog(self, pid_to_monitor: int):
         """

@@ -117,11 +117,13 @@ class WindowDetector:
             # Check if we ended up at the root window
             if current_window == self.root:
                 return self._create_root_window_info()
-            
+
             # Get detailed information about the window
             return self._get_window_info(current_window)
-            
+
         except Exception as e:
+            # Window queries can fail with BadWindow (destroyed), XError, RuntimeError, etc.
+            # Windows can be closed/moved between query and access. Broad handling required.
             logger.error(f"Failed to get window at position ({x}, {y}): {e}")
             return None
 
