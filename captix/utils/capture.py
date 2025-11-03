@@ -691,7 +691,7 @@ class ScreenCapture:
                 logger.warning(
                     f"Direct window capture failed: {inner_e}, trying alternative method"
                 )
-                return self._capture_window_with_background_subtraction(
+                return self._capture_window_area_fallback(
                     window_info, include_cursor
                 )
 
@@ -699,12 +699,23 @@ class ScreenCapture:
             logger.error(f"Window direct capture failed: {e}")
             raise RuntimeError(f"Direct window capture failed: {e}")
 
-    def _capture_window_with_background_subtraction(
+    def _capture_window_area_fallback(
         self, window_info: WindowInfo, include_cursor: bool
-    ) -> Optional[Image.Image]:
+    ) -> Tuple[Optional[Image.Image], int, int]:
         """
-        Alternative pure window capture using background subtraction technique.
-        This captures the area behind the window and the area with the window, then extracts the difference.
+        Fallback window capture using area-based capture technique.
+
+        This is used when direct X11 pixmap capture fails. It captures the screen
+        area where the window is located, which may include overlapping windows.
+        Border detection is not available with this method.
+
+        Args:
+            window_info: Information about the window to capture
+            include_cursor: Whether to include the cursor in the capture
+
+        Returns:
+            Tuple of (image, left_border, top_border) where borders are always 0
+            since border detection is not available in area-based capture
         """
         try:
             # First, capture the window area normally (this will include overlaps)
@@ -719,16 +730,9 @@ class ScreenCapture:
             if not window_with_overlaps:
                 raise RuntimeError("Failed to capture window area")
 
-            # For now, return the window with overlaps as we can't easily subtract background
-            # In a real implementation, you'd need to:
-            # 1. Temporarily hide the window
-            # 2. Capture the background
-            # 3. Show the window again
-            # 4. Subtract the background from the window capture
-            # This is complex and may cause visual artifacts
-
-            logger.info(
-                "Using window capture with potential overlaps (background subtraction not implemented)"
+            logger.warning(
+                "Using area-based fallback capture - may include overlapping windows "
+                "(direct pixmap capture not available)"
             )
 
             if include_cursor:
@@ -736,11 +740,12 @@ class ScreenCapture:
                     window_with_overlaps, window_info
                 )
 
-            return window_with_overlaps
+            # Return consistent tuple format (borders unknown in area capture)
+            return (window_with_overlaps, 0, 0)
 
         except Exception as e:
-            logger.error(f"Background subtraction capture failed: {e}")
-            raise RuntimeError(f"Background subtraction capture failed: {e}")
+            logger.error(f"Area-based fallback capture failed: {e}")
+            raise RuntimeError(f"Area-based fallback capture failed: {e}")
 
     def _add_cursor_to_pure_window(
         self, image: Image.Image, window_info: WindowInfo

@@ -1,7 +1,7 @@
 # CaptiX Refactoring Progress
 
 **Last Updated:** 2025-11-03
-**Status:** Phase 3 Complete (Conservative Approach)
+**Status:** Phase 4 Complete (Type Bug Fixed)
 
 ---
 
@@ -170,9 +170,71 @@ except Exception as e:
 
 ---
 
-## Phase 4: Code Deduplication ⏸️ NOT STARTED
+## Phase 4: Code Deduplication ✅ COMPLETED
 
-All tasks pending.
+### 4.1 Remove legacy frame extents method ✅
+**Status:** COMPLETED IN PHASE 2
+**File:** `captix/utils/window_detect.py`
+**What was done:** Already removed in Phase 2.4 - the `_get_frame_extents()` wrapper was deleted
+**Impact:** Skipped (already complete)
+
+### 4.2 Consolidate window geometry calculations ✅
+**Status:** NO ACTION NEEDED (FALSE POSITIVE)
+**Files Analyzed:** `captix/utils/window_detect.py:328`, `captix/ui.py:1230`
+**What was found:**
+- `_get_absolute_coordinates()` - Low-level X11 coordinate resolution (walks window hierarchy)
+- `_get_window_content_geometry()` - High-level UI geometry calculation (calls existing `get_window_frame_extents()`)
+
+**Why no changes:** These are NOT duplicates - they serve different architectural purposes:
+- Different layers: X11 detection vs PyQt UI rendering
+- Different return types: `Tuple[int, int]` vs `QRect`
+- Different use cases: Window detection queries vs UI painting operations
+- Already reusing common logic (border detection method is shared)
+
+**Impact:** Preserved proper separation of concerns
+
+### 4.3 Fix window capture fallback ✅
+**Status:** COMPLETED (TYPE BUG FIXED)
+**File:** `captix/utils/capture.py`
+**What was done:**
+
+1. **Renamed method** (line 702):
+   - From: `_capture_window_with_background_subtraction()`
+   - To: `_capture_window_area_fallback()`
+
+2. **Fixed type inconsistency bug** (lines 704, 740):
+   - Changed return type from `Optional[Image.Image]` to `Tuple[Optional[Image.Image], int, int]`
+   - Changed return from `return window_with_overlaps` to `return (window_with_overlaps, 0, 0)`
+   - **Critical:** Parent method returns tuple, fallback was returning only image
+
+3. **Updated docstring** (lines 705-719):
+   - Removed misleading "background subtraction" reference
+   - Clarified this is an area-based fallback for when X11 pixmap capture fails
+   - Documented that border detection is unavailable in fallback mode
+
+4. **Removed misleading TODO** (deleted lines 722-728):
+   - Removed TODO about implementing "real" background subtraction (never intended to be implemented)
+
+5. **Updated log messages** (lines 733-735, 747-748):
+   - Changed to accurately reflect area-based fallback behavior
+
+6. **Updated caller** (line 694):
+   - Changed method call to use new name
+
+**Why this approach:** The refactoring plan suggested either implementing real background subtraction or removing the fallback. Both were wrong:
+- ❌ Real background subtraction would cause flicker and timing issues
+- ❌ Removing fallback would eliminate capture reliability when X11 pixmap fails
+- ✅ Renaming + fixing type bug + clarifying docs was the correct fix
+
+**Impact:** Type safety bug fixed, clearer code intent, better logging
+
+**Phase 4 Summary:**
+- **Files Modified:** 1 (capture.py)
+- **Lines Changed:** 23 insertions, 18 deletions (net +5 lines, mostly improved documentation)
+- **Type Bug Fixed:** 1 (return type inconsistency in fallback path)
+- **Methods Renamed:** 1 (more accurate naming)
+- **False Positives Avoided:** 1 (Task 4.2 geometry "duplication")
+- **Testing:** ✅ Syntax validated, CLI verified working, no references to old method name remain
 
 ---
 
@@ -217,9 +279,11 @@ All tasks pending.
 2. **Import paths changed** - all `from utils.` are now `from captix.utils.`
 3. **Phase 1 accuracy was ~40%** - several false positives identified, one critical misunderstanding corrected
 4. **Phase 3 plan was 90% wrong** - only 8 of 105 exception handlers should be changed; broad handling is correct for X11 operations
-5. **Before continuing:** Re-verify line numbers and locations for remaining phases
-6. **Architecture is now clearer:** One entry point, one package, clear module separation
-7. **Exception handling philosophy:** File I/O = specific exceptions; X11/UI/subprocess = broad handling (intentional defensive programming)
+5. **Phase 4 had 1 false positive** - Task 4.2 identified "duplicate" methods that were actually proper layer separation
+6. **Before continuing:** Re-verify line numbers and locations for remaining phases
+7. **Architecture is now clearer:** One entry point, one package, clear module separation
+8. **Exception handling philosophy:** File I/O = specific exceptions; X11/UI/subprocess = broad handling (intentional defensive programming)
+9. **Code deduplication lesson:** Always verify if "duplicates" serve different architectural purposes before consolidating
 
 ---
 
@@ -230,3 +294,5 @@ All tasks pending.
 3. **Updated module docstrings** - Removed outdated phase tracking comments, added clear purpose statements
 4. **Kept exception handlers** - The "empty" handlers identified in the plan were either already logging or intentionally silent for good reasons
 5. **Conservative error handling approach** - Rejected 90% of Phase 3 plan; only changed file I/O handlers, kept 97 X11/UI/subprocess handlers broad (correct defensive programming for unpredictable X11 behavior)
+6. **Renamed instead of "fixing" fallback** - The background subtraction method wasn't broken, just misleadingly named; fixed type bug and clarified intent rather than implementing complex algorithms or removing reliability
+7. **Preserved layer separation** - Kept coordinate calculation methods separate despite similar names; they serve different architectural layers (X11 vs UI)
