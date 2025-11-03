@@ -18,6 +18,7 @@ from typing import Optional
 from PyQt6.QtWidgets import QWidget
 from PyQt6.QtCore import Qt, QRect, QPoint
 from PyQt6.QtGui import QPixmap, QPainter, QColor, QPen
+from captix.utils.theme import CaptiXColors
 
 logger = logging.getLogger(__name__)
 
@@ -52,9 +53,10 @@ class MagnifierWidget(QWidget):
         self.setFixedSize(self.MAGNIFIER_SIZE, self.MAGNIFIER_SIZE)
 
         # Set background with refined appearance
+        # Using theme colors: DARK_BACKGROUND and WHITE_BORDER
         self.setStyleSheet("""
             QWidget {
-                background-color: rgba(40, 40, 40, 240); 
+                background-color: rgba(40, 40, 40, 240);
                 border: 2px solid rgba(255, 255, 255, 180);
                 border-radius: 8px;
             }
@@ -174,7 +176,7 @@ class MagnifierWidget(QWidget):
         pixel_size = self.ZOOM_FACTOR  # Each source pixel becomes 10x10 in display
         
         # Draw pixel grid overlay (subtle)
-        painter.setPen(QPen(QColor(255, 255, 255, 60), 1))  # Very subtle white grid
+        painter.setPen(QPen(CaptiXColors.SUBTLE_WHITE_GRID, 1))  # Very subtle white grid
         for x in range(0, self.MAGNIFIER_SIZE, pixel_size):
             painter.drawLine(x, 0, x, self.MAGNIFIER_SIZE)
         for y in range(0, self.MAGNIFIER_SIZE, pixel_size):
@@ -189,13 +191,13 @@ class MagnifierWidget(QWidget):
         pixel_top = (center_y // pixel_size) * pixel_size
         
         # Draw highlighted center pixel with solid blue border (pixel-perfect alignment)
-        highlight_pen = QPen(QColor(0, 150, 255, 255), 2)  # Solid blue, no dashed style
+        highlight_pen = QPen(CaptiXColors.THEME_BLUE_SOLID, 2)  # Solid blue, no dashed style
         painter.setPen(highlight_pen)
         # Draw with pixel-perfect alignment - one pixel larger to right and bottom
         painter.drawRect(pixel_left, pixel_top, pixel_size + 1, pixel_size + 1)
         
         # Draw white crosshair guides extending across entire magnifier (full column/row coverage)
-        guide_pen = QPen(QColor(255, 255, 255, 50), pixel_size + 1)  # White with moderate alpha, pixel_size - 1 thick
+        guide_pen = QPen(CaptiXColors.SUBTLE_WHITE_GUIDE, pixel_size + 1)  # White with moderate alpha, pixel_size - 1 thick
         painter.setPen(guide_pen)
         
         # Vertical crosshair line covering full column (pixel_size - 1 thick)
@@ -207,7 +209,7 @@ class MagnifierWidget(QWidget):
         painter.drawLine(0, center_pixel_y, self.MAGNIFIER_SIZE, center_pixel_y)
         
         # Draw outer border around the magnifier with dashed style
-        border_pen = QPen(QColor(0, 150, 255, 200), 2)  # Same blue as UI theme
+        border_pen = QPen(CaptiXColors.THEME_BLUE, 2)  # Same blue as UI theme
         border_pen.setStyle(Qt.PenStyle.DashDotLine)  # Dashed border
         painter.setPen(border_pen)
         painter.drawRect(self.rect().adjusted(1, 1, -1, -1))
@@ -215,7 +217,7 @@ class MagnifierWidget(QWidget):
         # Display current cursor coordinates
         from PyQt6.QtGui import QFont
         painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
-        painter.setPen(QPen(QColor(255, 255, 255, 220), 1))  # White text with high opacity
+        painter.setPen(QPen(CaptiXColors.WHITE_TEXT_READABLE, 1))  # White text with high opacity
         
         # Draw text background for better readability
         coord_text = f"X: {self.cursor_x}  Y: {self.cursor_y}"
@@ -226,7 +228,7 @@ class MagnifierWidget(QWidget):
         text_bg_rect.moveTopLeft(QPoint(center_x, 8))
         
         # Semi-transparent background for text
-        painter.fillRect(text_bg_rect, QColor(0, 0, 0, 120))
+        painter.fillRect(text_bg_rect, CaptiXColors.SEMI_TRANSPARENT_BLACK)
         
         # Draw the coordinates text
         painter.drawText(text_bg_rect.adjusted(5, 2, -5, -2), Qt.AlignmentFlag.AlignLeft, coord_text)

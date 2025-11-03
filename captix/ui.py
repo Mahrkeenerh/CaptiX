@@ -48,6 +48,7 @@ from PIL import Image
 from captix.utils.capture import ScreenCapture, list_visible_windows
 from captix.utils.clipboard import copy_image_to_clipboard
 from captix.utils.window_detect import WindowDetector, WindowInfo
+from captix.utils.theme import CaptiXColors
 from captix.utils.magnifier import MagnifierWidget
 from captix.utils.notifications import notify_screenshot_saved, send_notification
 from captix.utils.external_watchdog import ExternalWatchdog
@@ -59,6 +60,36 @@ logger = logging.getLogger(__name__)
 # Failsafe configuration
 FAILSAFE_WATCHDOG_TIMEOUT_SECONDS = 5  # External watchdog timeout for complete freezes
 FAILSAFE_THREAD_TIMEOUT_SECONDS = 5  # Max time for background thread operations
+
+
+class UIConstants:
+    """Configuration constants for screenshot UI overlay.
+
+    These constants control the appearance and behavior of the interactive
+    screenshot overlay, including animations, mouse interaction, and UI layout.
+    """
+
+    # Animation timing (milliseconds)
+    FADE_ANIMATION_DURATION_MS = 250  # Window fade-in duration
+    OVERLAY_OPACITY = 0.5  # Dark overlay opacity (50%)
+
+    # Mouse interaction thresholds
+    CLICK_THRESHOLD_MS = 200  # Max time for click vs drag (milliseconds)
+    DRAG_THRESHOLD_PX = 5  # Min pixel movement to start drag
+    WINDOW_DETECTION_MOVEMENT_PX = 10  # Min movement to trigger window detection
+
+    # Window size filters (pixels)
+    MIN_WINDOW_SIZE_CAPTURE = 200  # Minimum window size to capture
+    MIN_WINDOW_SIZE_SYSTEM = 50  # Below this is likely a system window
+
+    # UI layout (pixels)
+    DIMENSIONS_DISPLAY_PADDING = 6  # Padding around dimension text
+    DIMENSIONS_DISPLAY_MARGIN = 10  # Margin from selection edge
+    HIGHLIGHT_BORDER_WIDTH = 2  # Window highlight border width
+
+    # Timer intervals (milliseconds)
+    WATCHDOG_CHECK_INTERVAL_MS = 1000  # How often to check watchdogs
+    HEARTBEAT_UPDATE_INTERVAL_MS = 1000  # How often to update external watchdog
 
 
 @dataclass
@@ -127,8 +158,8 @@ class ScreenshotOverlay(QWidget):
             0,
             0,
         )  # Global coordinates where mouse was pressed
-        self.click_threshold_ms: int = 200  # Max time for click vs drag (milliseconds)
-        self.drag_threshold_px: int = 5  # Min pixel movement to start drag
+        self.click_threshold_ms: int = UIConstants.CLICK_THRESHOLD_MS  # Max time for click vs drag (milliseconds)
+        self.drag_threshold_px: int = UIConstants.DRAG_THRESHOLD_PX  # Min pixel movement to start drag
 
         # Selection rectangle state
         self.is_dragging: bool = False
@@ -268,7 +299,7 @@ class ScreenshotOverlay(QWidget):
                 filtered_windows = [
                     w
                     for w in all_visible_windows
-                    if not w.is_root and w.width >= 200 and w.height >= 200
+                    if not w.is_root and w.width >= UIConstants.MIN_WINDOW_SIZE_CAPTURE and w.height >= UIConstants.MIN_WINDOW_SIZE_CAPTURE
                 ]
                 logger.info(
                     f"Using basic filtering: {len(filtered_windows)} out of {len(all_visible_windows)} windows"
@@ -280,7 +311,7 @@ class ScreenshotOverlay(QWidget):
             for window_info in filtered_windows:
                 try:
                     # Additional skip check for very small windows (system windows)
-                    if window_info.width < 50 and window_info.height < 50:
+                    if window_info.width < UIConstants.MIN_WINDOW_SIZE_SYSTEM and window_info.height < UIConstants.MIN_WINDOW_SIZE_SYSTEM:
                         logger.debug(
                             f"Skipping small window: {window_info.title} ({window_info.width}x{window_info.height})"
                         )
@@ -433,13 +464,13 @@ class ScreenshotOverlay(QWidget):
         """Set up the fade-in animation for the window and dark overlay."""
         # Create animation for the window opacity (entire window fades in)
         self.fade_animation = QPropertyAnimation(self, b"windowOpacity")
-        self.fade_animation.setDuration(250)  # 0.25 seconds
+        self.fade_animation.setDuration(UIConstants.FADE_ANIMATION_DURATION_MS)  # 0.25 seconds
         self.fade_animation.setStartValue(0.0)  # Start transparent
         self.fade_animation.setEndValue(1.0)  # End fully visible
         self.fade_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
 
         # Set the dark overlay to target opacity immediately (no separate animation)
-        self._overlay_opacity = 0.5
+        self._overlay_opacity = UIConstants.OVERLAY_OPACITY
 
         logger.info("Fade animation configured (0.25s, window opacity 0% to 100%)")
 
@@ -473,7 +504,7 @@ class ScreenshotOverlay(QWidget):
         # Thread watchdog timer - monitors background thread execution
         self.thread_watchdog_timer = QTimer(self)
         self.thread_watchdog_timer.timeout.connect(self._on_thread_watchdog)
-        self.thread_watchdog_timer.start(1000)  # Check every second
+        self.thread_watchdog_timer.start(UIConstants.WATCHDOG_CHECK_INTERVAL_MS)  # Check every second
         logger.info(f"Thread watchdog failsafe enabled: {FAILSAFE_THREAD_TIMEOUT_SECONDS}s max thread time")
 
         # External watchdog - CRITICAL: This works even if Qt event loop freezes
@@ -484,7 +515,7 @@ class ScreenshotOverlay(QWidget):
             # Heartbeat timer - updates external watchdog that we're still alive
             self.heartbeat_timer = QTimer(self)
             self.heartbeat_timer.timeout.connect(self._update_external_watchdog_heartbeat)
-            self.heartbeat_timer.start(1000)  # Update every 1 second
+            self.heartbeat_timer.start(UIConstants.HEARTBEAT_UPDATE_INTERVAL_MS)  # Update every 1 second
             logger.info(f"External watchdog failsafe enabled: {FAILSAFE_WATCHDOG_TIMEOUT_SECONDS}s freeze detection")
         except Exception as e:
             logger.error(f"Failed to start external watchdog: {e}")
@@ -564,7 +595,7 @@ class ScreenshotOverlay(QWidget):
         distance_moved = abs(x - self.last_detection_pos[0]) + abs(
             y - self.last_detection_pos[1]
         )
-        if distance_moved < 10:  # Only detect every 10 pixels of movement
+        if distance_moved < UIConstants.WINDOW_DETECTION_MOVEMENT_PX:  # Only detect every 10 pixels of movement
             return
 
         self.last_detection_pos = (x, y)
@@ -940,7 +971,8 @@ class ScreenshotOverlay(QWidget):
 
         # Draw the dark overlay layer with animated opacity, but not over selection area or highlighted window
         alpha_value = int(self._overlay_opacity * 255)
-        dark_overlay_color = QColor(0, 0, 0, alpha_value)
+        dark_overlay_color = CaptiXColors.DARK_OVERLAY_BLACK
+        dark_overlay_color.setAlpha(alpha_value)
 
         # Determine exclusion rectangle (area to keep at normal brightness)
         exclusion_rect = None
@@ -1015,8 +1047,8 @@ class ScreenshotOverlay(QWidget):
             # Draw selection border if we're dragging (based on drag direction from origin point)
             if self.selection_rect and self.is_dragging:
                 pen = painter.pen()
-                pen.setColor(QColor(0, 150, 255, 200))  # Same blue as window highlight
-                pen.setWidth(2)  # 2px border
+                pen.setColor(CaptiXColors.THEME_BLUE)  # Same blue as window highlight
+                pen.setWidth(UIConstants.HIGHLIGHT_BORDER_WIDTH)  # 2px border
                 pen.setStyle(Qt.PenStyle.DashDotLine)  # Dash-dot style to match guidelines
                 painter.setPen(pen)
 
@@ -1128,8 +1160,8 @@ class ScreenshotOverlay(QWidget):
 
         # Always draw border for clarity (both modes)
         pen = painter.pen()
-        pen.setColor(QColor(0, 150, 255, 200))  # Blue border that stands out better
-        pen.setWidth(2)  # 2 pixel width for better visibility over any content
+        pen.setColor(CaptiXColors.THEME_BLUE)  # Blue border that stands out better
+        pen.setWidth(UIConstants.HIGHLIGHT_BORDER_WIDTH)  # 2 pixel width for better visibility over any content
         pen.setStyle(Qt.PenStyle.DashDotLine)  # Dash-dot style to match guidelines
         painter.setPen(pen)
         painter.drawRect(visible_window_rect)
@@ -1156,9 +1188,9 @@ class ScreenshotOverlay(QWidget):
 
         # Configure pen for dash-dot guidelines
         pen = painter.pen()
-        pen.setColor(QColor(0, 150, 255, 200))  # Same blue as window highlight
+        pen.setColor(CaptiXColors.THEME_BLUE)  # Same blue as window highlight
         pen.setWidth(
-            2
+            UIConstants.HIGHLIGHT_BORDER_WIDTH
         )  # Thicker lines for better visibility (matches window border width)
         pen.setStyle(Qt.PenStyle.DashDotLine)  # Dash-dot style
         painter.setPen(pen)
@@ -1194,7 +1226,7 @@ class ScreenshotOverlay(QWidget):
         text_rect = font_metrics.boundingRect(dimensions_text)
 
         # Add padding around text
-        padding = 6  # Smaller padding
+        padding = UIConstants.DIMENSIONS_DISPLAY_PADDING  # Smaller padding
         text_bg_width = text_rect.width() + (padding * 2)
         text_bg_height = text_rect.height() + (padding * 2)
 
@@ -1203,18 +1235,18 @@ class ScreenshotOverlay(QWidget):
         selection_bottom_right_y = self.selection_rect.bottom()
 
         # Anchor to bottom-right, inside selection
-        bg_x = selection_bottom_right_x - text_bg_width - 10  # 10px margin from edge
-        bg_y = selection_bottom_right_y - text_bg_height - 10  # 10px margin from edge
+        bg_x = selection_bottom_right_x - text_bg_width - UIConstants.DIMENSIONS_DISPLAY_MARGIN  # 10px margin from edge
+        bg_y = selection_bottom_right_y - text_bg_height - UIConstants.DIMENSIONS_DISPLAY_MARGIN  # 10px margin from edge
 
         # Create background rectangle
         bg_rect = QRect(bg_x, bg_y, text_bg_width, text_bg_height)
 
         # Draw semi-transparent background
-        painter.fillRect(bg_rect, QColor(0, 0, 0, 120))  # Dark background
+        painter.fillRect(bg_rect, CaptiXColors.SEMI_TRANSPARENT_BLACK)  # Dark background
 
         # Draw the dimensions text (no border)
         text_pen = painter.pen()
-        text_pen.setColor(QColor(255, 255, 255, 255))  # White text
+        text_pen.setColor(CaptiXColors.WHITE_TEXT)  # White text
         text_pen.setWidth(1)
         painter.setPen(text_pen)
 

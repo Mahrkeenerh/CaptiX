@@ -28,6 +28,8 @@ from .clipboard import copy_image_to_clipboard
 from .window_detect import WindowDetector, WindowInfo
 # Import notification functionality
 from .notifications import notify_screenshot_saved
+# Import path utilities
+from .paths import CaptiXPaths
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -1017,15 +1019,14 @@ class ScreenCapture:
         """
         # Set default directory
         if directory is None:
-            directory = os.path.expanduser("~/Pictures/Screenshots")
-        
+            directory = CaptiXPaths.get_screenshots_dir()
+
         # Create directory if it doesn't exist
         Path(directory).mkdir(parents=True, exist_ok=True)
-        
+
         # Generate filename if not provided
         if filename is None:
-            timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
-            filename = f"sc_{timestamp}_{capture_type}.png"
+            filename = CaptiXPaths.generate_screenshot_filename(capture_type)
         
         # Ensure .png extension
         if not filename.lower().endswith('.png'):

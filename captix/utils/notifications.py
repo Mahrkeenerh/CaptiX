@@ -18,6 +18,19 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 
+class NotificationTimeouts:
+    """Timeout constants for notifications.
+
+    These values control how long notifications stay visible on the desktop
+    and how long to wait for notification system responses.
+    """
+
+    # Standard notification display durations (milliseconds)
+    NOTIFICATION_DISPLAY_MS = 5000  # How long to show notifications (5 seconds)
+    GLIB_LOOP_TIMEOUT_MS = 6000  # GLib event loop timeout (6 seconds)
+    ERROR_NOTIFICATION_MS = 3000  # Shorter timeout for errors (3 seconds)
+
+
 class NotificationSystem:
     """Handles desktop notifications for CaptiX."""
 
@@ -142,12 +155,12 @@ def on_action(notification, action):
 
 Notify.init('CaptiX')
 notification = Notify.Notification.new('{summary}', '''{body}''', '{icon}')
-notification.set_timeout(5000)
+notification.set_timeout({NotificationTimeouts.NOTIFICATION_DISPLAY_MS})
 notification.add_action('default', 'Open Folder', on_action)
 notification.show()
 
 loop = GLib.MainLoop()
-GLib.timeout_add(6000, loop.quit)
+GLib.timeout_add({NotificationTimeouts.GLIB_LOOP_TIMEOUT_MS}, loop.quit)
 loop.run()
 """
             subprocess.Popen(
@@ -164,7 +177,7 @@ loop.run()
                     "notify-send",
                     "-i", icon,
                     "-u", "normal",
-                    "-t", "5000",
+                    "-t", str(NotificationTimeouts.NOTIFICATION_DISPLAY_MS),
                     "-a", "CaptiX",
                     summary,
                     body,
@@ -290,7 +303,7 @@ loop.run()
                     "notify-send",
                     "-i", "dialog-warning",
                     "-u", "normal",
-                    "-t", "3000",
+                    "-t", str(NotificationTimeouts.ERROR_NOTIFICATION_MS),
                     "-a", "CaptiX",
                     "Recording Aborted",
                     "Recording was cancelled",
@@ -318,7 +331,7 @@ loop.run()
                     "notify-send",
                     "-i", "dialog-error",
                     "-u", "critical",
-                    "-t", "5000",
+                    "-t", str(NotificationTimeouts.NOTIFICATION_DISPLAY_MS),
                     "-a", "CaptiX",
                     title,
                     message,
@@ -384,7 +397,7 @@ def send_notification(title: str, message: str, urgency: str = "normal", icon: s
                 "notify-send",
                 "-i", icon,
                 "-u", urgency,
-                "-t", "5000",
+                "-t", str(NotificationTimeouts.NOTIFICATION_DISPLAY_MS),
                 "-a", "CaptiX",
                 title,
                 message,

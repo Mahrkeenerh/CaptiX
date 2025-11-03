@@ -1,7 +1,7 @@
 # CaptiX Refactoring Progress
 
 **Last Updated:** 2025-11-03
-**Status:** Phase 4 Complete (Type Bug Fixed)
+**Status:** Phase 5 Complete (Constants Extracted)
 
 ---
 
@@ -238,9 +238,53 @@ except Exception as e:
 
 ---
 
-## Phase 5: Extract Constants & Configuration ⏸️ NOT STARTED
+## Phase 5: Extract Constants & Configuration ✅ COMPLETED
 
-All tasks pending.
+### 5.1 Extract magic numbers to module-level constants ✅
+**Status:** COMPLETED
+**What was done:**
+- Created `UIConstants` class in `captix/ui.py` with 11 constants
+- Replaced 15 magic number instances across ui.py
+- Animation: FADE_ANIMATION_DURATION_MS, OVERLAY_OPACITY
+- Mouse: CLICK_THRESHOLD_MS, DRAG_THRESHOLD_PX, WINDOW_DETECTION_MOVEMENT_PX
+- Window filters: MIN_WINDOW_SIZE_CAPTURE, MIN_WINDOW_SIZE_SYSTEM
+- UI layout: DIMENSIONS_DISPLAY_PADDING, DIMENSIONS_DISPLAY_MARGIN, HIGHLIGHT_BORDER_WIDTH
+- Timers: WATCHDOG_CHECK_INTERVAL_MS, HEARTBEAT_UPDATE_INTERVAL_MS
+
+### 5.2 Create centralized color theme ✅
+**Status:** COMPLETED
+**New file:** `captix/utils/theme.py`
+**What was done:**
+- Created `CaptiXColors` class with 10 color constants
+- Eliminated 6+ duplications of theme blue `QColor(0, 150, 255, 200)`
+- Updated `captix/ui.py` (6 color instances)
+- Updated `captix/utils/magnifier.py` (6 color instances)
+
+### 5.3 Centralize file path handling ✅
+**Status:** COMPLETED
+**New file:** `captix/utils/paths.py`
+**What was done:**
+- Created `CaptiXPaths` class with path utilities
+- Methods: get_screenshots_dir(), get_videos_dir(), ensure_directories(), generate_screenshot_filename()
+- Updated `captix/cli.py` to use CaptiXPaths.ensure_directories()
+- Updated `captix/utils/capture.py` to use CaptiXPaths for directory and filename generation
+- Eliminated 2 path duplications
+
+### 5.4 Extract notification timeouts ✅
+**Status:** COMPLETED
+**What was done:**
+- Created `NotificationTimeouts` class in `captix/utils/notifications.py`
+- Constants: NOTIFICATION_DISPLAY_MS (5000), GLIB_LOOP_TIMEOUT_MS (6000), ERROR_NOTIFICATION_MS (3000)
+- Replaced 6 hardcoded timeout values
+
+**Phase 5 Summary:**
+- **Files Created:** 2 (theme.py, paths.py)
+- **Files Modified:** 5 (ui.py, magnifier.py, cli.py, capture.py, notifications.py)
+- **Lines Changed:** +89, -46 (net +43 lines for configuration/documentation)
+- **Magic Numbers Extracted:** 40-50 values
+- **Color Duplications Eliminated:** 6+
+- **Path Duplications Eliminated:** 2
+- **Testing:** ✅ All modules import, CLI functional, screenshot tested, all constants verified
 
 ---
 

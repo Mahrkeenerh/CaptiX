@@ -12,17 +12,12 @@ import argparse
 import sys
 import os
 from pathlib import Path
+from captix.utils.paths import CaptiXPaths
 
 
 def setup_directories():
     """Ensure default directories exist."""
-    screenshots_dir = os.path.expanduser("~/Pictures/Screenshots")
-    videos_dir = os.path.expanduser("~/Videos/Recordings")
-
-    Path(screenshots_dir).mkdir(parents=True, exist_ok=True)
-    Path(videos_dir).mkdir(parents=True, exist_ok=True)
-
-    return screenshots_dir, videos_dir
+    return CaptiXPaths.ensure_directories()
 
 
 def cmd_screenshot(args):
