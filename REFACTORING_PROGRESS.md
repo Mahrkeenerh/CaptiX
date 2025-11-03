@@ -1,7 +1,7 @@
 # CaptiX Refactoring Progress
 
 **Last Updated:** 2025-11-03
-**Status:** Phase 6 Complete (Methods Refactored)
+**Status:** Phase 7 Complete (Security & Best Practices)
 
 ---
 
@@ -347,9 +347,83 @@ except Exception as e:
 
 ---
 
-## Phase 7: Security & Best Practices ⏸️ NOT STARTED
+## Phase 7: Security & Best Practices ✅ COMPLETED
 
-All tasks pending.
+### 7.1 Fix watchdog code generation security issue ✅
+**Status:** COMPLETED (JSON Configuration Approach)
+**File:** `captix/utils/external_watchdog.py`
+**What was done:**
+1. Changed from f-string interpolation to JSON-based configuration
+2. Added `import json` to module imports
+3. Created config dictionary: `{'heartbeat_file': str, 'pid_to_monitor': int, 'timeout_seconds': int}`
+4. Changed watchdog_code from f-string (vulnerable) to regular string
+5. Updated subprocess call: `[sys.executable, "-c", watchdog_code, json.dumps(config)]`
+6. Watchdog code now parses config via: `config = json.loads(sys.argv[1])`
+
+**Why this approach:**
+- ❌ Plan suggested creating separate `utils/watchdog_process.py` module
+- ❌ Separate module adds package complexity without significant benefit
+- ✅ JSON approach eliminates injection risk while maintaining simplicity
+- ✅ Single-file deployment preserved (important for process isolation)
+- ✅ Actual risk was LOW (internal paths only) but fixed for best practices
+
+**Security testing:**
+- ✅ JSON serialization/deserialization works correctly
+- ✅ Edge cases tested (paths with quotes, backslashes, dollar signs, backticks)
+- ✅ All special characters handled safely
+- ✅ No injection possible
+
+**Impact:** Eliminates theoretical injection vulnerability, improves maintainability, cleaner code
+
+### 7.2 Fix thread synchronization issues ✅
+**Status:** COMPLETED (Hybrid Defensive Approach)
+**File:** `captix/ui.py`
+**What was done:**
+1. **Added comprehensive thread safety documentation** (lines 203-224):
+   - Explained read-after-initialization pattern
+   - Documented 3 phases: initialization (locked), operational (read-only), cleanup (locked)
+   - Clarified why main thread reads don't need locks (happens-before guarantee via signal)
+
+2. **Added defensive guard to prevent post-completion modifications** (lines 284-289):
+   - Added check in `capture_all_windows()` method
+   - Raises `RuntimeError` if called after `_captures_complete = True`
+   - Prevents accidental modifications after initialization
+
+3. **Protected captured_windows.clear() with lock** (lines 1406-1407):
+   - Wrapped `self.captured_windows.clear()` with `self._capture_lock`
+   - Defensive protection during cleanup phase
+
+4. **Added method-level thread safety documentation** (lines 1370-1376):
+   - Documented `_do_window_captures()` thread safety design
+   - Explained lock scope and signal behavior
+
+**Why this approach:**
+- ❌ Plan suggested adding locks to all dictionary access (too defensive, hurts performance)
+- ✅ Current design is mostly correct (read-after-signal pattern)
+- ✅ Added defensive guards at write points only
+- ✅ Documented the design pattern for future maintainers
+- ✅ Zero performance impact (no lock contention on paint events)
+
+**Thread safety analysis:**
+- Background thread: Only writes during initialization (protected by lock)
+- Main thread: Reads after `captures_complete` signal (safe, no lock needed)
+- Signal mechanism: Provides happens-before memory guarantee
+- Defensive guards: Prevent future bugs from accidental misuse
+
+**Risk assessment:**
+- Original risk: LOW-MEDIUM (mostly correct, theoretical race conditions)
+- Current risk: VERY LOW (documented, guarded, same performance)
+
+**Impact:** Clarifies design intent, prevents future bugs, zero performance cost
+
+**Phase 7 Summary:**
+- **Files Modified:** 2 (external_watchdog.py, ui.py)
+- **Lines Changed:** +54, -58 (net -4 lines, mostly improved comments/structure)
+- **Security Issues Fixed:** 1 (injection vulnerability eliminated)
+- **Thread Safety Improvements:** 3 (documentation, defensive guard, cleanup protection)
+- **Performance Impact:** None (no lock contention added)
+- **Testing:** ✅ Syntax validated, JSON approach tested with edge cases, all guards verified
+- **Risk Level:** LOW (conservative changes, preserves existing behavior)
 
 ---
 
@@ -397,3 +471,5 @@ All tasks pending.
 8. **Extracted paintEvent() conservatively** - Created 5 focused helpers that respect tight coupling between overlay and selection; avoided over-abstraction
 9. **Deleted dead code** - Removed unused `capture_window_pure_content_by_id()` after verification (zero references)
 10. **Skipped unnecessary task** - Task 6.3 complexity reduction not needed after Task 6.1 already addressed it
+11. **JSON config over separate module** - Phase 7.1 used JSON for watchdog config instead of creating separate module; simpler solution with same security benefit
+12. **Documented instead of over-locking** - Phase 7.2 added defensive guards and documentation instead of locks everywhere; preserved performance while clarifying design

@@ -200,6 +200,29 @@ class ScreenshotOverlay(QWidget):
         self._captures_complete = False
         self._capture_lock = threading.Lock()
 
+        # Thread Safety Design:
+        # =====================
+        # This overlay uses a read-after-initialization pattern for thread safety:
+        #
+        # 1. INITIALIZATION PHASE (background thread, protected by lock):
+        #    - Background thread captures windows and populates captured_windows dict
+        #    - All writes are protected by _capture_lock
+        #    - Sets _captures_complete = True when done
+        #    - Emits captures_complete signal to notify main thread
+        #
+        # 2. OPERATIONAL PHASE (main thread, no lock needed):
+        #    - Main thread receives captures_complete signal
+        #    - After signal, captured_windows becomes effectively read-only
+        #    - No more writes from background thread
+        #    - Main thread reads captured_windows without locks (safe after signal)
+        #    - Python's GIL + signal/slot mechanism provides happens-before guarantee
+        #
+        # 3. CLEANUP PHASE (main thread, protected by lock):
+        #    - captured_windows.clear() is protected by lock (defensive)
+        #
+        # This pattern avoids lock contention on every paint event while maintaining
+        # thread safety. The lock is only needed during initialization and cleanup.
+
         # Connect signal for thread-safe capture completion
         self.captures_complete.connect(self._on_captures_complete)
 
@@ -281,6 +304,13 @@ class ScreenshotOverlay(QWidget):
 
     def capture_all_windows(self):
         """Capture all visible windows individually with workspace filtering."""
+        # Defensive check: prevent modifications after initialization complete
+        if self._captures_complete:
+            raise RuntimeError(
+                "Cannot capture windows after initialization complete. "
+                "This indicates a programming error - captures should only run during initialization."
+            )
+
         try:
             logger.info(
                 "Capturing visible windows with workspace and minimized filtering..."
@@ -1337,7 +1367,13 @@ class ScreenshotOverlay(QWidget):
         logger.info("Overlay window shown and focused")
 
     def _do_window_captures(self):
-        """Perform window captures in background thread (full screenshot already done)."""
+        """Perform window captures in background thread (full screenshot already done).
+
+        Thread Safety: This method runs in a background thread during initialization.
+        The lock protects all writes to captured_windows and _captures_complete.
+        After the lock is released and the signal is emitted, captured_windows
+        becomes effectively read-only, so main thread can read without locks.
+        """
         try:
             with self._capture_lock:
                 # Full screenshot was already captured in showEvent
@@ -1347,6 +1383,7 @@ class ScreenshotOverlay(QWidget):
                 # Clear thread start time to stop watchdog monitoring
                 self.thread_start_time = None
             # Signal completion (thread-safe)
+            # After this signal, main thread can safely read captured_windows without locks
             self.captures_complete.emit()
         except Exception as e:
             logger.error(f"Error in background window capture thread: {e}")
@@ -1396,7 +1433,8 @@ class ScreenshotOverlay(QWidget):
 
         # Clean up enhanced capture data
         self.frozen_full_image = None
-        self.captured_windows.clear()
+        with self._capture_lock:
+            self.captured_windows.clear()
 
         # Clean up magnifier widget
         if self.magnifier:

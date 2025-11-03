@@ -14,6 +14,7 @@ import time
 import signal
 import subprocess
 import logging
+import json
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -55,18 +56,30 @@ class ExternalWatchdog:
         # Create initial heartbeat
         self.update_heartbeat()
 
-        # Fork a watchdog process
-        watchdog_code = f"""
+        # Prepare configuration as JSON (safe from injection)
+        config = {
+            'heartbeat_file': str(self.heartbeat_file),
+            'pid_to_monitor': pid_to_monitor,
+            'timeout_seconds': self.timeout_seconds
+        }
+
+        # Watchdog code that receives config via JSON
+        # This eliminates string interpolation injection risks
+        watchdog_code = '''
 import os
+import sys
 import time
 import signal
+import json
 from pathlib import Path
 
-heartbeat_file = Path("{self.heartbeat_file}")
-pid_to_monitor = {pid_to_monitor}
-timeout_seconds = {self.timeout_seconds}
+# Parse configuration from JSON argument (safe from injection)
+config = json.loads(sys.argv[1])
+heartbeat_file = Path(config['heartbeat_file'])
+pid_to_monitor = config['pid_to_monitor']
+timeout_seconds = config['timeout_seconds']
 
-print(f"[Watchdog] Monitoring PID {{pid_to_monitor}} with {{timeout_seconds}}s timeout", flush=True)
+print(f"[Watchdog] Monitoring PID {pid_to_monitor} with {timeout_seconds}s timeout", flush=True)
 
 while True:
     time.sleep(1)
@@ -75,7 +88,7 @@ while True:
     try:
         os.kill(pid_to_monitor, 0)
     except OSError:
-        print(f"[Watchdog] Process {{pid_to_monitor}} no longer exists - exiting watchdog", flush=True)
+        print(f"[Watchdog] Process {pid_to_monitor} no longer exists - exiting watchdog", flush=True)
         heartbeat_file.unlink(missing_ok=True)
         sys.exit(0)
 
@@ -86,7 +99,7 @@ while True:
             elapsed = time.time() - last_heartbeat
 
             if elapsed > timeout_seconds:
-                print(f"[Watchdog] TIMEOUT! No heartbeat for {{elapsed:.1f}}s - killing process {{pid_to_monitor}}", flush=True)
+                print(f"[Watchdog] TIMEOUT! No heartbeat for {elapsed:.1f}s - killing process {pid_to_monitor}", flush=True)
 
                 # Send notification before killing
                 try:
@@ -98,7 +111,7 @@ while True:
                         "-t", "5000",
                         "-a", "CaptiX",
                         "CaptiX Watchdog",
-                        f"Screenshot overlay frozen for {{int(elapsed)}}s - force killing"
+                        f"Screenshot overlay frozen for {int(elapsed)}s - force killing"
                     ], check=False, timeout=2)
                 except:
                     pass
@@ -109,16 +122,16 @@ while True:
                 print(f"[Watchdog] Process killed successfully", flush=True)
                 sys.exit(0)
         except Exception as e:
-            print(f"[Watchdog] Error checking heartbeat: {{e}}", flush=True)
+            print(f"[Watchdog] Error checking heartbeat: {e}", flush=True)
     else:
         print(f"[Watchdog] Heartbeat file disappeared - exiting watchdog", flush=True)
         sys.exit(0)
-"""
+'''
 
         try:
-            # Start watchdog as a detached subprocess
+            # Start watchdog as a detached subprocess with JSON config
             process = subprocess.Popen(
-                [sys.executable, "-c", watchdog_code],
+                [sys.executable, "-c", watchdog_code, json.dumps(config)],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 start_new_session=True,  # Detach from parent
