@@ -253,12 +253,12 @@ class ScreenshotOverlay(QWidget):
         # Start with window opacity at 0 for fade-in effect
         self.setWindowOpacity(0.0)
 
-        logger.info("Overlay window configured")
+        logger.debug("Overlay window configured")
 
     def capture_frozen_screen(self):
         """Capture the current screen state to use as frozen background (immediate, not in thread)."""
         try:
-            logger.info("Capturing frozen screen background...")
+            logger.debug("Capturing frozen screen background...")
 
             # Initialize capture system
             self.capture_system = ScreenCapture()
@@ -331,7 +331,7 @@ class ScreenshotOverlay(QWidget):
                     for w in all_visible_windows
                     if not w.is_root and w.width >= UIConstants.MIN_WINDOW_SIZE_CAPTURE and w.height >= UIConstants.MIN_WINDOW_SIZE_CAPTURE
                 ]
-                logger.info(
+                logger.debug(
                     f"Using basic filtering: {len(filtered_windows)} out of {len(all_visible_windows)} windows"
                 )
 
@@ -502,7 +502,7 @@ class ScreenshotOverlay(QWidget):
         # Set the dark overlay to target opacity immediately (no separate animation)
         self._overlay_opacity = UIConstants.OVERLAY_OPACITY
 
-        logger.info("Fade animation configured (0.25s, window opacity 0% to 100%)")
+        logger.debug("Fade animation configured (0.25s, window opacity 0% to 100%)")
 
     def setup_window_detection(self):
         """Initialize window detection system."""
@@ -524,7 +524,7 @@ class ScreenshotOverlay(QWidget):
         """Initialize the magnifier widget."""
         try:
             self.magnifier = MagnifierWidget()
-            logger.info("Magnifier widget initialized (150x150px)")
+            logger.info(f"Magnifier widget initialized ({MagnifierWidget.MAGNIFIER_SIZE}x{MagnifierWidget.MAGNIFIER_SIZE}px)")
         except Exception as e:
             logger.error(f"Failed to initialize magnifier widget: {e}")
             self.magnifier = None
@@ -535,7 +535,7 @@ class ScreenshotOverlay(QWidget):
         self.thread_watchdog_timer = QTimer(self)
         self.thread_watchdog_timer.timeout.connect(self._on_thread_watchdog)
         self.thread_watchdog_timer.start(UIConstants.WATCHDOG_CHECK_INTERVAL_MS)  # Check every second
-        logger.info(f"Thread watchdog failsafe enabled: {FAILSAFE_THREAD_TIMEOUT_SECONDS}s max thread time")
+        logger.debug(f"Thread watchdog failsafe enabled: {FAILSAFE_THREAD_TIMEOUT_SECONDS}s max thread time")
 
         # External watchdog - CRITICAL: This works even if Qt event loop freezes
         try:
@@ -777,18 +777,18 @@ class ScreenshotOverlay(QWidget):
             self.press_start_time = time.time()
             self.press_position = (global_pos.x(), global_pos.y())
 
-            logger.info(f"Mouse pressed at global position: {self.press_position}")
+            logger.debug(f"Mouse pressed at global position: {self.press_position}")
 
             # Check what's under the cursor at press time
             if self.highlighted_window:
                 if self.highlighted_window.is_root:
-                    logger.info("Mouse pressed on desktop/root window")
+                    logger.debug("Mouse pressed on desktop/root window")
                 else:
-                    logger.info(
+                    logger.debug(
                         f"Mouse pressed on window: {self.highlighted_window.title} ({self.highlighted_window.class_name})"
                     )
             else:
-                logger.info("Mouse pressed with no window detected")
+                logger.debug("Mouse pressed with no window detected")
 
         super().mousePressEvent(event)
 
@@ -824,7 +824,7 @@ class ScreenshotOverlay(QWidget):
             if self.magnifier:
                 self.magnifier.hide_magnifier()
 
-            logger.info(
+            logger.debug(
                 f"Mouse released at {current_pos}, duration: {click_duration_ms:.1f}ms, moved: {distance_moved}px"
             )
 
@@ -853,7 +853,7 @@ class ScreenshotOverlay(QWidget):
 
                 if target_window_id in self.captured_windows:
                     captured_window = self.captured_windows[target_window_id]
-                    logger.info(
+                    logger.debug(
                         f"Window click detected on: {captured_window.window_info.title}"
                     )
 
@@ -1345,11 +1345,11 @@ class ScreenshotOverlay(QWidget):
 
         # Capture full screenshot IMMEDIATELY for instant display
         if not self._captures_complete and not self.frozen_screen:
-            logger.info("Capturing full screenshot immediately...")
+            logger.debug("Capturing full screenshot immediately...")
             self.capture_frozen_screen()
             # Trigger repaint to show frozen screen right away
             self.update()
-            logger.info("Full screenshot captured, starting window captures in background")
+            logger.debug("Full screenshot captured, starting window captures in background")
 
         # Start the fade-in animation now that the window is visible
         if self.fade_animation and self.fade_animation.state() != QPropertyAnimation.State.Running:

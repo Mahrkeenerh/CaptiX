@@ -39,14 +39,13 @@ class ExternalWatchdog:
         self.heartbeat_file = Path(f"/tmp/captix_heartbeat_{os.getpid()}")
         self.watchdog_pid = None
 
-    def update_heartbeat(self):
-        """Update the heartbeat file to signal the watchdog we're still alive."""
+    def update_heartbeat(self) -> None:
         try:
             self.heartbeat_file.write_text(str(time.time()))
         except (OSError, IOError) as e:
             logger.warning(f"Failed to update heartbeat file {self.heartbeat_file}: {e}")
 
-    def start_watchdog(self, pid_to_monitor: int):
+    def start_watchdog(self, pid_to_monitor: int) -> None:
         """
         Start the external watchdog process.
 
@@ -141,8 +140,7 @@ while True:
         except Exception as e:
             logger.error(f"Failed to start external watchdog: {e}")
 
-    def stop_watchdog(self):
-        """Stop the external watchdog process."""
+    def stop_watchdog(self) -> None:
         # Delete heartbeat file to signal watchdog to exit
         try:
             self.heartbeat_file.unlink(missing_ok=True)

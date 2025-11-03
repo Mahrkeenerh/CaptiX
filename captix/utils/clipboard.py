@@ -48,14 +48,14 @@ def copy_image_to_clipboard(file_path: str) -> bool:
         try:
             process.wait(timeout=1)
             if process.returncode == 0:
-                logger.info(f"Image file copied to clipboard successfully: {file_path}")
+                logger.debug(f"Image file copied to clipboard successfully: {file_path}")
                 return True
             else:
                 logger.warning(f"xclip returned code {process.returncode}, but may have succeeded")
                 return True  # Return True anyway since clipboard often works even with non-zero codes
         except subprocess.TimeoutExpired:
             # Process is still running, but clipboard copy likely succeeded
-            logger.info(f"xclip still running, but clipboard copy likely successful: {file_path}")
+            logger.debug(f"xclip still running, but clipboard copy likely successful: {file_path}")
             return True
             
     except FileNotFoundError:
@@ -77,7 +77,6 @@ def test_clipboard_availability() -> bool:
 
 
 def _check_xclip_available() -> bool:
-    """Check if xclip is available on the system."""
     try:
         result = subprocess.run(
             ['which', 'xclip'], 

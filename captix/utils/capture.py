@@ -32,7 +32,6 @@ from .notifications import notify_screenshot_saved
 from .paths import CaptiXPaths
 
 # Set up logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # XFixes cursor capture using ctypes (based on PyXCursor)
@@ -151,7 +150,6 @@ class XComposite:
             logger.warning(f"Failed to unredirect window: {e}")
 
     def close(self):
-        """Close the display connection."""
         if hasattr(self, "display") and self.display:
             self.xlib.XCloseDisplay(self.display)
 

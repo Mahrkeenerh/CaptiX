@@ -40,7 +40,6 @@ class NotificationSystem:
         self.sound_available = self._check_sound_support()
 
     def _check_notification_support(self) -> bool:
-        """Check if desktop notifications are available."""
         # Try notify-send first (most common)
         try:
             result = subprocess.run(
@@ -54,7 +53,6 @@ class NotificationSystem:
             return False
 
     def _check_sound_support(self) -> bool:
-        """Check if sound playback is available."""
         # Check for paplay (PulseAudio)
         try:
             result = subprocess.run(
@@ -82,7 +80,7 @@ class NotificationSystem:
         logger.warning("No sound playback system found (paplay or aplay)")
         return False
 
-    def _play_sound(self, sound_name: str = "camera-shutter"):
+    def _play_sound(self, sound_name: str = "camera-shutter") -> None:
         """
         Play a system sound for screenshot feedback.
 
@@ -131,7 +129,7 @@ class NotificationSystem:
         body: str,
         icon: str,
         folder_path: str,
-    ):
+    ) -> None:
         """
         Show a notification with clickable action using GObject Notify.
 
@@ -209,7 +207,7 @@ loop.run()
         filepath: str,
         file_size: int,
         play_sound: bool = True,
-    ):
+    ) -> None:
         """
         Show a notification that a screenshot was saved.
 
@@ -255,7 +253,7 @@ loop.run()
         file_size: int,
         duration: str,
         play_sound: bool = True,
-    ):
+    ) -> None:
         """
         Show a notification that a recording was saved.
 
@@ -292,7 +290,7 @@ loop.run()
         except Exception as e:
             logger.error(f"Failed to show notification: {e}")
 
-    def notify_recording_aborted(self):
+    def notify_recording_aborted(self) -> None:
         """Show a notification that recording was aborted."""
         if not self.notification_available:
             return
@@ -314,7 +312,7 @@ loop.run()
         except Exception as e:
             logger.error(f"Failed to show notification: {e}")
 
-    def notify_error(self, title: str, message: str):
+    def notify_error(self, title: str, message: str) -> None:
         """
         Show an error notification.
 
@@ -356,27 +354,27 @@ def get_notification_system() -> NotificationSystem:
 
 
 # Convenience functions for common operations
-def notify_screenshot_saved(filepath: str, file_size: int, play_sound: bool = True):
+def notify_screenshot_saved(filepath: str, file_size: int, play_sound: bool = True) -> None:
     """Show notification for saved screenshot."""
     get_notification_system().notify_screenshot_saved(filepath, file_size, play_sound)
 
 
-def notify_recording_saved(filepath: str, file_size: int, duration: str, play_sound: bool = True):
+def notify_recording_saved(filepath: str, file_size: int, duration: str, play_sound: bool = True) -> None:
     """Show notification for saved recording."""
     get_notification_system().notify_recording_saved(filepath, file_size, duration, play_sound)
 
 
-def notify_recording_aborted():
+def notify_recording_aborted() -> None:
     """Show notification for aborted recording."""
     get_notification_system().notify_recording_aborted()
 
 
-def notify_error(title: str, message: str):
+def notify_error(title: str, message: str) -> None:
     """Show error notification."""
     get_notification_system().notify_error(title, message)
 
 
-def send_notification(title: str, message: str, urgency: str = "normal", icon: str = "dialog-information"):
+def send_notification(title: str, message: str, urgency: str = "normal", icon: str = "dialog-information") -> None:
     """
     Send a generic desktop notification.
 

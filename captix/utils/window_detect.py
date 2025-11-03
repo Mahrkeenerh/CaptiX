@@ -43,7 +43,6 @@ class WindowDetector:
         self._init_atoms()
     
     def _init_atoms(self):
-        """Initialize commonly used X11 atoms."""
         atom_names = [
             "_GTK_FRAME_EXTENTS",  # Must be checked BEFORE _NET_FRAME_EXTENTS
             "_NET_FRAME_EXTENTS",
@@ -253,7 +252,6 @@ class WindowDetector:
             return False
 
     def _create_root_window_info(self) -> WindowInfo:
-        """Create WindowInfo for the root window (desktop)."""
         try:
             geometry = self.root.get_geometry()
             return WindowInfo(

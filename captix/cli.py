@@ -16,11 +16,10 @@ from captix.utils.paths import CaptiXPaths
 
 
 def setup_directories():
-    """Ensure default directories exist."""
     return CaptiXPaths.ensure_directories()
 
 
-def cmd_screenshot(args):
+def cmd_screenshot(args) -> int:
     """Handle screenshot command."""
     # Import here to avoid issues with path setup
     from captix.utils.capture import (
@@ -99,7 +98,7 @@ def cmd_screenshot(args):
         return 1
 
 
-def cmd_info(args):
+def cmd_info(args) -> int:
     """Display system information."""
     from captix.utils.capture import ScreenCapture
 
@@ -127,7 +126,7 @@ def cmd_info(args):
     return 0
 
 
-def cmd_list_windows(args):
+def cmd_list_windows(args) -> int:
     """List all visible windows."""
     from captix.utils.capture import list_visible_windows
 
@@ -164,7 +163,7 @@ def cmd_list_windows(args):
         return 1
 
 
-def cmd_window_info(args):
+def cmd_window_info(args) -> int:
     """Get information about window at specific coordinates."""
     from captix.utils.capture import get_window_info_at_position
 
@@ -198,7 +197,7 @@ def cmd_window_info(args):
         return 1
 
 
-def cmd_test_clipboard(args):
+def cmd_test_clipboard(args) -> int:
     """Test clipboard functionality."""
     from captix.utils.clipboard import test_clipboard_availability
 
@@ -216,7 +215,7 @@ def cmd_test_clipboard(args):
         return 1
 
 
-def cmd_screenshot_ui(args):
+def cmd_screenshot_ui(args) -> int:
     """Launch interactive screenshot UI."""
     try:
         from captix.ui import main as screenshot_ui_main
@@ -232,7 +231,7 @@ def cmd_screenshot_ui(args):
         return 1
 
 
-def main():
+def main() -> int:
     """Main entry point for CLI interface."""
     parser = argparse.ArgumentParser(
         description="CaptiX - Fast screenshot and screen recording tool for Linux X11",

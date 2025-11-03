@@ -40,7 +40,6 @@ class MagnifierWidget(QWidget):
         self.is_visible: bool = False
         
     def setup_window(self):
-        """Configure the magnifier window properties."""
         # Make window frameless and always on top
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint |
@@ -74,7 +73,6 @@ class MagnifierWidget(QWidget):
         self.hide()
         
     def set_source_image(self, image: QPixmap):
-        """Set the source image to magnify from."""
         self.source_image = image
         self.update()
         
@@ -86,7 +84,6 @@ class MagnifierWidget(QWidget):
         self.update()
         
     def position_magnifier(self):
-        """Position the magnifier widget at bottom-left of cursor."""
         if not self.source_image:
             return
 
@@ -125,7 +122,7 @@ class MagnifierWidget(QWidget):
             self.is_visible = True
             self.show()
             self.raise_()  # Bring to front but don't activate
-            logger.info(f"Magnifier widget shown at position ({self.x()}, {self.y()})")
+            logger.debug(f"Magnifier widget shown at position ({self.x()}, {self.y()})")
         else:
             # Ensure it stays visible and on top (but don't steal focus)
             self.raise_()
@@ -135,9 +132,9 @@ class MagnifierWidget(QWidget):
         if self.is_visible:
             self.is_visible = False
             self.hide()
-            logger.info("Magnifier widget hidden")
+            logger.debug("Magnifier widget hidden")
         else:
-            logger.info("Magnifier already hidden")
+            logger.debug("Magnifier already hidden")
             
     def paintEvent(self, event):
         """Paint the magnified view with pixel highlighting and crosshairs."""
