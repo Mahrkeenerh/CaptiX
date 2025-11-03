@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """
-CaptiX - Fast screenshot and screen recording tool for Linux X11
+CaptiX CLI interface and command routing.
 
-Main entry point and CLI interface.
-Phase 1: Basic screenshot functionality with command-line interface.
+This module handles command-line argument parsing and routes commands
+to appropriate handlers (screenshot, UI, system info, window management).
+
+Main entry point: captix/__main__.py or captix-screenshot wrapper script.
 """
 
 import argparse
@@ -16,24 +18,24 @@ def setup_directories():
     """Ensure default directories exist."""
     screenshots_dir = os.path.expanduser("~/Pictures/Screenshots")
     videos_dir = os.path.expanduser("~/Videos/Recordings")
-    
+
     Path(screenshots_dir).mkdir(parents=True, exist_ok=True)
     Path(videos_dir).mkdir(parents=True, exist_ok=True)
-    
+
     return screenshots_dir, videos_dir
 
 
 def cmd_screenshot(args):
     """Handle screenshot command."""
     # Import here to avoid issues with path setup
-    from utils.capture import (
+    from captix.utils.capture import (
         capture_screenshot,
         capture_window_at_position,
         capture_window_at_position_pure,
     )
-    
+
     print("Taking screenshot...")
-    
+
     try:
         if args.window_pure_at:
             # Capture pure window content at specific coordinates
@@ -87,7 +89,7 @@ def cmd_screenshot(args):
                 include_cursor=not args.no_cursor,
                 copy_to_clipboard=not args.no_clipboard,
             )
-        
+
         print(f"Screenshot saved: {filepath}")
         print(f"File size: {size} bytes ({size/1024:.1f} KB)")
 
@@ -96,7 +98,7 @@ def cmd_screenshot(args):
             print("Screenshot copied to clipboard")
 
         return 0
-        
+
     except Exception as e:
         print(f"Error taking screenshot: {e}")
         return 1
@@ -104,13 +106,13 @@ def cmd_screenshot(args):
 
 def cmd_info(args):
     """Display system information."""
-    from utils.capture import ScreenCapture
-    
+    from captix.utils.capture import ScreenCapture
+
     capture = ScreenCapture()
     try:
         x, y, width, height = capture.get_screen_geometry()
         print(f"Screen geometry: {width}x{height} at ({x}, {y})")
-        
+
         # Display information about the capture system
         print(f"X11 Display: {capture.display.get_display_name()}")
         print(f"Screen depth: {capture.screen.root_depth}")
@@ -126,13 +128,13 @@ def cmd_info(args):
         return 1
     finally:
         capture.cleanup()
-    
+
     return 0
 
 
 def cmd_list_windows(args):
     """List all visible windows."""
-    from utils.capture import list_visible_windows
+    from captix.utils.capture import list_visible_windows
 
     print("Listing visible windows...")
 
@@ -169,7 +171,7 @@ def cmd_list_windows(args):
 
 def cmd_window_info(args):
     """Get information about window at specific coordinates."""
-    from utils.capture import get_window_info_at_position
+    from captix.utils.capture import get_window_info_at_position
 
     try:
         x, y = map(int, args.position.split(","))
@@ -203,7 +205,7 @@ def cmd_window_info(args):
 
 def cmd_test_clipboard(args):
     """Test clipboard functionality."""
-    from utils.clipboard import test_clipboard_availability
+    from captix.utils.clipboard import test_clipboard_availability
 
     print("Testing clipboard availability...")
 
@@ -222,7 +224,7 @@ def cmd_test_clipboard(args):
 def cmd_screenshot_ui(args):
     """Launch interactive screenshot UI."""
     try:
-        from screenshot_ui import main as screenshot_ui_main
+        from captix.ui import main as screenshot_ui_main
 
         print("Launching interactive screenshot UI...")
         return screenshot_ui_main()
@@ -236,14 +238,14 @@ def cmd_screenshot_ui(args):
 
 
 def main():
-    """Main entry point."""
+    """Main entry point for CLI interface."""
     parser = argparse.ArgumentParser(
         description="CaptiX - Fast screenshot and screen recording tool for Linux X11",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   %(prog)s --screenshot                           # Take full screen screenshot
-  %(prog)s --screenshot --area 100,100,800,600   # Capture specific area  
+  %(prog)s --screenshot --area 100,100,800,600   # Capture specific area
   %(prog)s --screenshot --window-at 500,300      # Capture window at coordinates
   %(prog)s --screenshot --window-pure-at 500,300 # Capture pure window content (no overlaps)
   %(prog)s --screenshot --no-cursor              # Screenshot without cursor
@@ -255,12 +257,12 @@ Examples:
   %(prog)s --window-info 500,300                 # Get window info at coordinates
         """,
     )
-    
+
     # Commands
     parser.add_argument('--screenshot', action='store_true',
                        help='Take a screenshot')
     parser.add_argument(
-        "--ui", action="store_true", help="Launch interactive screenshot UI (Phase 4)"
+        "--ui", action="store_true", help="Launch interactive screenshot UI"
     )
     parser.add_argument('--info', action='store_true',
                        help='Show system information')
@@ -276,7 +278,7 @@ Examples:
     parser.add_argument(
         "--test-clipboard", action="store_true", help="Test clipboard functionality"
     )
-    
+
     # Screenshot options
     parser.add_argument('--area', metavar='x,y,w,h',
                        help='Capture specific area (format: x,y,width,height)')
@@ -297,13 +299,13 @@ Examples:
     )
     parser.add_argument('--output', '-o', metavar='PATH',
                        help='Output directory or file path')
-    
+
     # Parse arguments
     args = parser.parse_args()
-    
+
     # Ensure directories exist
     setup_directories()
-    
+
     # Execute commands
     if args.screenshot:
         return cmd_screenshot(args)
@@ -320,7 +322,3 @@ Examples:
     else:
         parser.print_help()
         return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())

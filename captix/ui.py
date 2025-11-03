@@ -1,27 +1,16 @@
 #!/usr/bin/env python3
 """
-CaptiX Screenshot UI - Interactive overlay for screenshot selection
+CaptiX Screenshot UI - Interactive overlay for screenshot selection.
 
-Phase 4, Block 4.10: Selection Dimensions Display - COMPLETED
-- Show selection width x height in dimensions display
-- Anchor dimensions to bottom-right corner of selection, inside selection area
-- Format: "W × H" with clean styling and readable background
+This module contains the PyQt6 implementation of the screenshot overlay.
+It provides an interactive full-screen overlay with:
+- Frozen background with window highlighting
+- Area selection with live preview magnifier
+- Window detection and pure content capture
+- Real-time dimension display and crosshair guides
 
-Previous blocks completed:
-- Block 4.1: PyQt6 Setup & Basic Overlay
-- Block 4.2: Screen Capture & Frozen Background
-- Block 4.3: Dark Overlay Layer (Enhanced)
-- Block 4.4: Window Highlighting System
-- Block 4.5: Basic Mouse Event Handling
-- Block 4.6: Enhanced Temporal Consistency Capture System
-- Block 4.7: Selection Rectangle Drawing
-- Block 4.8: Basic Magnifier Widget
-- Block 4.9: Enhanced Magnifier Features
-- Block 4.10: Selection Dimensions Display
-
-Next blocks:
-- Block 4.11: Capture Integration & Polish
-- Block 4.12: Window Background Post-Processing
+This module is imported and used by the captix.cli module.
+Main entry point: captix/__main__.py or captix-screenshot wrapper script.
 
 FAILSAFE MECHANISMS (Anti-hang protection):
 1. External Watchdog - Separate process force-kills after 5s if frozen
@@ -56,12 +45,12 @@ from PyQt6.QtGui import (
     QImage,
 )
 from PIL import Image
-from utils.capture import ScreenCapture, list_visible_windows
-from utils.clipboard import copy_image_to_clipboard
-from utils.window_detect import WindowDetector, WindowInfo
-from utils.magnifier import MagnifierWidget
-from utils.notifications import notify_screenshot_saved, send_notification
-from utils.external_watchdog import ExternalWatchdog
+from captix.utils.capture import ScreenCapture, list_visible_windows
+from captix.utils.clipboard import copy_image_to_clipboard
+from captix.utils.window_detect import WindowDetector, WindowInfo
+from captix.utils.magnifier import MagnifierWidget
+from captix.utils.notifications import notify_screenshot_saved, send_notification
+from captix.utils.external_watchdog import ExternalWatchdog
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG)  # Enable debug logging
@@ -528,19 +517,20 @@ class ScreenshotOverlay(QWidget):
         logger.warning(f"FORCE EXIT triggered: {reason}")
         try:
             # Stop all timers immediately
-            if self.auto_timeout_timer:
-                self.auto_timeout_timer.stop()
+            # Note: auto_timeout_timer was removed in commit a46a066 (redundant failsafe)
             if self.thread_watchdog_timer:
                 self.thread_watchdog_timer.stop()
             if self.fade_animation:
                 self.fade_animation.stop()
 
-            # Hide magnifier
+            # Hide magnifier (best effort during emergency cleanup)
             if self.magnifier:
                 try:
                     self.magnifier.hide_magnifier()
                     self.magnifier.close()
-                except:
+                except Exception:
+                    # Intentionally silenced - magnifier cleanup is best-effort during emergency exit
+                    # Any errors are caught and logged by the outer exception handler below
                     pass
 
             # Force close window
@@ -1472,7 +1462,7 @@ class ScreenshotUI:
 def main():
     """Main entry point for screenshot UI."""
     # Check if another instance is already running
-    from utils.single_instance import SingleInstanceManager
+    from captix.utils.single_instance import SingleInstanceManager
 
     instance_manager = SingleInstanceManager()
     if not instance_manager.acquire():
@@ -1484,7 +1474,3 @@ def main():
     ui = ScreenshotUI()
     ui.instance_manager = instance_manager
     return ui.run()
-
-
-if __name__ == "__main__":
-    sys.exit(main())
