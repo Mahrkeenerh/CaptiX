@@ -1,15 +1,13 @@
 #!/usr/bin/env python3
 """
-CaptiX Magnifier Widget - Phase 4.8: Basic Magnifier Widget
+CaptiX Magnifier Widget
 
 Features implemented:
-- Separate magnifier window (150x150px)
+- Separate magnifier window (210x210px)
 - Position magnifier near cursor
 - Capture and display magnified area under cursor
 - Follow cursor movement during selection
-
-Next Phase 4.9 features to add:
-- 15-20x zoom magnification
+- 10x zoom magnification
 - Pixel grid overlay
 - Current cursor coordinates (X, Y)
 - Selection dimensions display
@@ -26,11 +24,11 @@ logger = logging.getLogger(__name__)
 
 class MagnifierWidget(QWidget):
     """Magnifier widget that shows a zoomed view of the area around the cursor."""
-    
-    # Constants for magnifier appearance (Phase 4.9 Enhanced)
+
+    # Constants for magnifier appearance
     MAGNIFIER_SIZE = 210  # Size for 21 pixels: 21x10 = 210px
     MAGNIFIER_OFFSET = 30  # Offset from cursor when positioned
-    ZOOM_FACTOR = 10  # Refined zoom level (10x)
+    ZOOM_FACTOR = 10  # Zoom level (10x)
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -52,8 +50,8 @@ class MagnifierWidget(QWidget):
         
         # Set fixed size
         self.setFixedSize(self.MAGNIFIER_SIZE, self.MAGNIFIER_SIZE)
-        
-        # Set background with refined appearance (Phase 4.9)
+
+        # Set background with refined appearance
         self.setStyleSheet("""
             QWidget {
                 background-color: rgba(40, 40, 40, 240); 
@@ -86,7 +84,7 @@ class MagnifierWidget(QWidget):
         self.update()
         
     def position_magnifier(self):
-        """Position the magnifier widget at bottom-left of cursor (Phase 4.9)."""
+        """Position the magnifier widget at bottom-left of cursor."""
         if not self.source_image:
             return
 
@@ -140,7 +138,7 @@ class MagnifierWidget(QWidget):
             logger.info("Magnifier already hidden")
             
     def paintEvent(self, event):
-        """Paint the magnified view with pixel highlighting and crosshairs (Phase 4.9)."""
+        """Paint the magnified view with pixel highlighting and crosshairs."""
         if not self.source_image:
             return
             
@@ -213,8 +211,8 @@ class MagnifierWidget(QWidget):
         border_pen.setStyle(Qt.PenStyle.DashDotLine)  # Dashed border
         painter.setPen(border_pen)
         painter.drawRect(self.rect().adjusted(1, 1, -1, -1))
-        
-        # Display current cursor coordinates (Phase 4.9 requirement)
+
+        # Display current cursor coordinates
         from PyQt6.QtGui import QFont
         painter.setFont(QFont("Arial", 12, QFont.Weight.Bold))
         painter.setPen(QPen(QColor(255, 255, 255, 220), 1))  # White text with high opacity

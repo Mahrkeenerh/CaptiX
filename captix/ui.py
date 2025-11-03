@@ -106,7 +106,7 @@ class ScreenshotOverlay(QWidget):
         self._overlay_opacity: float = 0.0  # Start with no opacity
         self.fade_animation: Optional[QPropertyAnimation] = None
 
-        # Enhanced capture system (Block 4.6a)
+        # Enhanced capture system
         self.captured_windows: Dict[
             int, CapturedWindow
         ] = {}  # window_id -> captured content
@@ -120,7 +120,7 @@ class ScreenshotOverlay(QWidget):
         self.cursor_y: int = 0
         self.last_detection_pos: tuple = (-1, -1)  # Track last detection position
 
-        # Mouse click tracking state (Block 4.5)
+        # Mouse click tracking state
         self.mouse_pressed: bool = False
         self.press_start_time: float = 0.0
         self.press_position: tuple = (
@@ -130,7 +130,7 @@ class ScreenshotOverlay(QWidget):
         self.click_threshold_ms: int = 200  # Max time for click vs drag (milliseconds)
         self.drag_threshold_px: int = 5  # Min pixel movement to start drag
 
-        # Selection rectangle state (Block 4.7)
+        # Selection rectangle state
         self.is_dragging: bool = False
         self.current_drag_pos: tuple = (0, 0)  # Current mouse position during drag
         self.selection_rect: Optional[QRect] = None  # Current selection rectangle
@@ -143,7 +143,7 @@ class ScreenshotOverlay(QWidget):
             False  # Default to False - only show border highlight
         )
 
-        # Magnifier widget state (Block 4.8)
+        # Magnifier widget state
         self.magnifier: Optional[MagnifierWidget] = None
 
         # Failsafe timers
@@ -456,7 +456,7 @@ class ScreenshotOverlay(QWidget):
             self.overlay_window_id = None
 
     def setup_magnifier(self):
-        """Initialize the magnifier widget (Block 4.8)."""
+        """Initialize the magnifier widget."""
         try:
             self.magnifier = MagnifierWidget()
             logger.info("Magnifier widget initialized (150x150px)")
@@ -673,23 +673,13 @@ class ScreenshotOverlay(QWidget):
                 # Clear window highlighting when dragging starts
                 self.highlighted_window = None
 
-        # Always update magnifier position during cursor movement (Block 4.8)
+        # Always update magnifier position during cursor movement
         if self.magnifier and self.frozen_screen:
-            # Only log occasionally to reduce spam
-            if global_pos.x() % 50 == 0:  # Log every 50 pixels
-                logger.info(
-                    f"Updating magnifier at cursor position ({global_pos.x()}, {global_pos.y()})"
-                )
             self.magnifier.set_source_image(self.frozen_screen)
             self.magnifier.update_cursor_position(global_pos.x(), global_pos.y())
             self.magnifier.show_magnifier()
-        else:
-            if not self.magnifier:
-                logger.warning("Magnifier is None!")
-            if not self.frozen_screen:
-                logger.warning("Frozen screen is None!")
 
-        # Handle active dragging (Block 4.7)
+        # Handle active dragging
         if self.is_dragging:
             current_pos = (global_pos.x(), global_pos.y())
             self.current_drag_pos = current_pos
@@ -765,7 +755,7 @@ class ScreenshotOverlay(QWidget):
             self.is_dragging = False
             self.selection_rect = None
 
-            # Hide magnifier on mouse release (Block 4.8)
+            # Hide magnifier on mouse release
             if self.magnifier:
                 self.magnifier.hide_magnifier()
 
@@ -1053,7 +1043,7 @@ class ScreenshotOverlay(QWidget):
                 if cursor_x > origin_x:
                     painter.drawLine(left, top, left, bottom)
 
-                # Draw selection dimensions display (Phase 4.10)
+                # Draw selection dimensions display
                 self.draw_selection_dimensions(painter)
 
                 logger.debug(
@@ -1082,7 +1072,7 @@ class ScreenshotOverlay(QWidget):
         self.draw_crosshair_guidelines(painter)
 
     def draw_window_highlight(self, painter: QPainter):
-        """Draw highlight overlay over the currently highlighted window - Block 4.6b Enhanced."""
+        """Draw highlight overlay over the currently highlighted window."""
         window = self.highlighted_window
         if not window:
             return
@@ -1105,7 +1095,7 @@ class ScreenshotOverlay(QWidget):
         # Conditional rendering based on preview mode
         if self.is_preview_mode_enabled:
             # Preview ON: Show full window content (bring-to-front effect)
-            # Block 4.6b: Try to show actual captured window content instead of gray overlay
+            # Try to show actual captured window content instead of gray overlay
             window_pixmap = self.get_window_qpixmap(window.window_id)
 
             if window_pixmap:
@@ -1130,34 +1120,6 @@ class ScreenshotOverlay(QWidget):
                 if not source_rect.isEmpty():
                     # Draw only the visible portion - no squishing
                     painter.drawPixmap(visible_window_rect, window_pixmap, source_rect)
-
-                # Debug for terminal window
-                if (
-                    "terminal" in window.class_name.lower()
-                    or "gnome-terminal" in window.class_name.lower()
-                ):
-                    logger.info(f"Terminal window debug: {window.title}")
-                    logger.info(f"  Window size: {window.width}x{window.height}")
-                    logger.info(
-                        f"  Pixmap size: {window_pixmap.width()}x{window_pixmap.height()}"
-                    )
-                    logger.info(
-                        f"  Visible rect: {visible_window_rect.width()}x{visible_window_rect.height()}"
-                    )
-                    logger.info(
-                        f"  Source rect: {source_rect.width()}x{source_rect.height()}"
-                    )
-                    # Check if we have the original image mode info
-                    if window.window_id in self.captured_windows:
-                        original_mode = self.captured_windows[
-                            window.window_id
-                        ].image.mode
-                        logger.info(f"  Original image mode: {original_mode}")
-                        logger.info(
-                            f"  Image size: {self.captured_windows[window.window_id].image.size}"
-                        )
-                    else:
-                        logger.info("  No captured window data found")
         # else: Preview OFF - don't draw window content, only border will be drawn below
 
         # Always draw border for clarity (both modes)
@@ -1208,7 +1170,7 @@ class ScreenshotOverlay(QWidget):
         )
 
     def draw_selection_dimensions(self, painter: QPainter):
-        """Draw selection dimensions anchored to bottom-right corner of selection (Phase 4.10)."""
+        """Draw selection dimensions anchored to bottom-right corner of selection."""
         if not self.selection_rect or self.selection_rect.isEmpty():
             return
 
@@ -1400,11 +1362,11 @@ class ScreenshotOverlay(QWidget):
         # Clean up frozen screen pixmap
         self.frozen_screen = None
 
-        # Clean up enhanced capture data (Block 4.6a)
+        # Clean up enhanced capture data
         self.frozen_full_image = None
         self.captured_windows.clear()
 
-        # Clean up magnifier widget (Block 4.8)
+        # Clean up magnifier widget
         if self.magnifier:
             self.magnifier.hide_magnifier()
             self.magnifier.close()

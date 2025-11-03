@@ -1,7 +1,7 @@
 # CaptiX Refactoring Progress
 
 **Last Updated:** 2025-11-03
-**Status:** Phase 1 Complete
+**Status:** Phase 2 Complete
 
 ---
 
@@ -63,21 +63,42 @@ CaptiX/
 
 ---
 
-## Phase 2: Remove Bloat ⏸️ NOT STARTED
+## Phase 2: Remove Bloat ✅ COMPLETED
 
-### 2.1 Remove debug code for terminal windows
-**Status:** TODO
-**Location:** `captix/ui.py` lines ~1145-1170 (need to verify line numbers after Phase 1 changes)
+### 2.1 Remove debug code for terminal windows ✅
+**Status:** COMPLETED
+**Location:** `captix/ui.py` lines 1134-1160
+**What was done:** Deleted 27 lines of terminal-specific debug logging code
+**Impact:** Cleaner production code, no development artifacts remaining
 
-### 2.2 Remove phase implementation comments
-**Status:** PARTIALLY DONE
-**Note:** Removed "Phase 4.X" comments from `captix/ui.py` docstring during restructure, but need to scan entire codebase for remaining phase comments
+### 2.2 Remove phase implementation comments ✅
+**Status:** COMPLETED
+**Locations:**
+- `captix/ui.py`: Removed 14 Phase/Block tracking comments
+- `captix/utils/magnifier.py`: Removed 7 Phase tracking comments, updated module docstring
+**Impact:** More professional code appearance, clearer documentation
 
-### 2.3 Reduce excessive logging in tight loops
-**Status:** TODO
+### 2.3 Reduce excessive logging in tight loops ✅
+**Status:** COMPLETED
+**Location:** `captix/ui.py` lines 676-690
+**What was done:**
+- Removed mouse movement logging (fired every 50 pixels)
+- Removed unnecessary magnifier None warnings
+**Impact:** 14 lines removed, significantly reduced log spam during normal operation
 
-### 2.4 Remove dead/unused code
-**Status:** TODO
+### 2.4 Remove dead/unused code ✅
+**Status:** COMPLETED
+**Locations:**
+- `captix/utils/clipboard.py`: Deleted empty `cleanup_clipboard()` function (7 lines)
+- `captix/utils/window_detect.py`: Deleted unused `_get_frame_extents()` wrapper (11 lines)
+**Impact:** Zero dead code remaining in modified files
+
+**Phase 2 Summary:**
+- **Files Modified:** 4 (ui.py, magnifier.py, clipboard.py, window_detect.py)
+- **Net Lines Removed:** 56 lines (84 deletions, 28 insertions)
+- **Comments Removed:** 21 Phase/Block tracking references
+- **Code Reduction:** ~10-12% in modified files
+- **Testing:** All functionality verified working (imports, CLI, window detection)
 
 ---
 

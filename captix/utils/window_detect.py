@@ -450,17 +450,6 @@ class WindowDetector:
         # No borders detected
         return (0, 0, 0, 0)
 
-    def _get_frame_extents(self, window) -> Optional[Tuple[int, int, int, int]]:
-        """
-        Legacy method - calls get_window_frame_extents() and returns None if no borders.
-
-        Kept for backward compatibility.
-        """
-        extents = self.get_window_frame_extents(window)
-        if extents == (0, 0, 0, 0):
-            return None
-        return extents
-    
     def _get_window_class(self, window) -> str:
         """Get window class name."""
         try:

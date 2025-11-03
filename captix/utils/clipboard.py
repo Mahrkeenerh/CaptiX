@@ -95,10 +95,5 @@ def _check_xclip_available() -> bool:
 
 
 # Fallback implementation note:
-# The old X11 direct implementation has been removed in favor of the 
+# The old X11 direct implementation has been removed in favor of the
 # more reliable xclip file-based approach
-
-
-def cleanup_clipboard():
-    """Clean up clipboard resources (no longer needed with file-based approach)."""
-    pass
