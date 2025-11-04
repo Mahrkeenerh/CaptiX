@@ -139,8 +139,15 @@ CaptiX includes failsafe mechanisms to prevent you from getting stuck if the ove
 
 **Normal exit:** Press Escape to close the overlay normally.
 
-**Last resort (if all failsafes fail):**
-If everything fails and you're stuck with a frozen overlay:
+**If watchdog fails:**
+If the overlay freezes and the watchdog doesn't kill it after 5 seconds:
+
+**Quick option (GNOME):**
+1. Press `Super` to open Activities/Workspace view
+2. Find and close the CaptiX window from the workspace switcher
+
+**Last resort (text console):**
+If the workspace option doesn't work:
 1. Press `Ctrl+Alt+F3` to switch to text console
 2. Login with your credentials
 3. Run: `pkill -9 captix-screenshot-ui`

@@ -70,7 +70,25 @@ import sys
 import time
 import signal
 import json
+import subprocess
+import logging
 from pathlib import Path
+from datetime import datetime
+
+# Setup logging to file for debugging
+log_file = Path("/tmp/captix_watchdog.log")
+logging.basicConfig(
+    filename=str(log_file),
+    level=logging.DEBUG,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger()
+
+def log_and_print(msg, level='INFO'):
+    """Log to both file and stdout for debugging"""
+    print(f"[Watchdog] {msg}", flush=True)
+    getattr(logger, level.lower())(msg)
 
 # Parse configuration from JSON argument (safe from injection)
 config = json.loads(sys.argv[1])
@@ -78,7 +96,32 @@ heartbeat_file = Path(config['heartbeat_file'])
 pid_to_monitor = config['pid_to_monitor']
 timeout_seconds = config['timeout_seconds']
 
-print(f"[Watchdog] Monitoring PID {pid_to_monitor} with {timeout_seconds}s timeout", flush=True)
+# Flag to track if we've already killed the process
+kill_executed = False
+
+def alarm_handler(signum, frame):
+    """
+    LAST RESORT failsafe handler - executes if we get stuck in notification code.
+    This runs when SIGALRM fires, guaranteeing kill even if notification hangs.
+    """
+    global kill_executed
+    if not kill_executed:
+        log_and_print("ALARM FIRED! Force killing process immediately (notification may have hung)", 'CRITICAL')
+        try:
+            os.kill(pid_to_monitor, signal.SIGKILL)
+            kill_executed = True
+            log_and_print(f"Process {pid_to_monitor} killed via alarm handler", 'CRITICAL')
+        except Exception as e:
+            log_and_print(f"Alarm handler kill failed: {e}", 'ERROR')
+    heartbeat_file.unlink(missing_ok=True)
+    sys.exit(0)
+
+# Install alarm signal handler as ultimate failsafe
+signal.signal(signal.SIGALRM, alarm_handler)
+
+log_and_print(f"Monitoring PID {pid_to_monitor} with {timeout_seconds}s timeout")
+log_and_print(f"Heartbeat file: {heartbeat_file}")
+log_and_print(f"Log file: {log_file}")
 
 while True:
     time.sleep(1)
@@ -87,7 +130,7 @@ while True:
     try:
         os.kill(pid_to_monitor, 0)
     except OSError:
-        print(f"[Watchdog] Process {pid_to_monitor} no longer exists - exiting watchdog", flush=True)
+        log_and_print(f"Process {pid_to_monitor} no longer exists - exiting watchdog")
         heartbeat_file.unlink(missing_ok=True)
         sys.exit(0)
 
@@ -98,32 +141,59 @@ while True:
             elapsed = time.time() - last_heartbeat
 
             if elapsed > timeout_seconds:
-                print(f"[Watchdog] TIMEOUT! No heartbeat for {elapsed:.1f}s - killing process {pid_to_monitor}", flush=True)
+                log_and_print(f"TIMEOUT DETECTED! No heartbeat for {elapsed:.1f}s", 'WARNING')
+                log_and_print(f"Initiating kill sequence for process {pid_to_monitor}", 'CRITICAL')
 
-                # Send notification before killing
+                # Set 1-second alarm as ultimate failsafe
+                # If anything below hangs, alarm handler will kill the process
+                log_and_print("Setting 1-second alarm failsafe", 'INFO')
+                signal.alarm(1)
+
+                # Try to send notification (fire-and-forget with Popen)
+                # Don't wait for it to complete - we need to kill immediately
+                log_and_print("Attempting to send notification (fire-and-forget)", 'INFO')
                 try:
-                    import subprocess
-                    subprocess.run([
-                        "notify-send",
-                        "-i", "dialog-warning",
-                        "-u", "critical",
-                        "-t", "5000",
-                        "-a", "CaptiX",
-                        "CaptiX Watchdog",
-                        f"Screenshot overlay frozen for {int(elapsed)}s - force killing"
-                    ], check=False, timeout=2)
-                except:
-                    pass
+                    subprocess.Popen(
+                        [
+                            "notify-send",
+                            "-i", "dialog-warning",
+                            "-u", "critical",
+                            "-t", "5000",
+                            "-a", "CaptiX",
+                            "CaptiX Watchdog",
+                            f"Screenshot overlay frozen for {int(elapsed)}s - force killing"
+                        ],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        start_new_session=True  # Fully detach notification process
+                    )
+                    log_and_print("Notification process spawned (not waiting for completion)", 'INFO')
+                except Exception as e:
+                    log_and_print(f"Notification spawn failed (non-critical): {e}", 'WARNING')
 
-                # Kill the process
-                os.kill(pid_to_monitor, signal.SIGKILL)
+                # Cancel alarm if we got here quickly (notification didn't hang)
+                signal.alarm(0)
+                log_and_print("Alarm cancelled - proceeding to kill", 'INFO')
+
+                # KILL THE PROCESS IMMEDIATELY
+                if not kill_executed:
+                    log_and_print(f"Sending SIGKILL to process {pid_to_monitor}", 'CRITICAL')
+                    try:
+                        os.kill(pid_to_monitor, signal.SIGKILL)
+                        kill_executed = True
+                        log_and_print("SIGKILL sent successfully", 'CRITICAL')
+                    except Exception as e:
+                        log_and_print(f"SIGKILL failed: {e}", 'ERROR')
+
+                # Clean up
                 heartbeat_file.unlink(missing_ok=True)
-                print(f"[Watchdog] Process killed successfully", flush=True)
+                log_and_print("Heartbeat file removed", 'INFO')
+                log_and_print("Watchdog job complete - exiting", 'INFO')
                 sys.exit(0)
         except Exception as e:
-            print(f"[Watchdog] Error checking heartbeat: {e}", flush=True)
+            log_and_print(f"Error checking heartbeat: {e}", 'ERROR')
     else:
-        print(f"[Watchdog] Heartbeat file disappeared - exiting watchdog", flush=True)
+        log_and_print("Heartbeat file disappeared - exiting watchdog")
         sys.exit(0)
 '''
 

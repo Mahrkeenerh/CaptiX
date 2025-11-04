@@ -186,6 +186,7 @@ class ScreenshotOverlay(QWidget):
         self.external_watchdog: Optional[ExternalWatchdog] = None
 
         self.setup_window()
+        self.setup_failsafe_timers()
 
         # Initialize window detection BEFORE screen capture for proper filtering
         self.setup_window_detection()
@@ -194,7 +195,6 @@ class ScreenshotOverlay(QWidget):
         self.setup_geometry()
         self.setup_animation()
         self.setup_magnifier()
-        self.setup_failsafe_timers()
 
         # Defer screen captures - will be done after window is shown
         self._captures_complete = False
