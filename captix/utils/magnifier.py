@@ -51,14 +51,15 @@ class MagnifierWidget(QWidget):
         # Set fixed size
         self.setFixedSize(self.MAGNIFIER_SIZE, self.MAGNIFIER_SIZE)
 
-        # Set background with refined appearance
-        # Using theme colors: DARK_BACKGROUND and WHITE_BORDER
-        self.setStyleSheet("""
-            QWidget {
-                background-color: rgba(40, 40, 40, 240);
-                border: 2px solid rgba(255, 255, 255, 180);
+        # Set background with refined appearance using theme colors
+        bg = CaptiXColors.DARK_BACKGROUND
+        border = CaptiXColors.WHITE_BORDER
+        self.setStyleSheet(f"""
+            QWidget {{
+                background-color: rgba({bg.red()}, {bg.green()}, {bg.blue()}, {bg.alpha()});
+                border: 2px solid rgba({border.red()}, {border.green()}, {border.blue()}, {border.alpha()});
                 border-radius: 8px;
-            }
+            }}
         """)
         
         # CRITICAL: Never accept focus and never steal keyboard events
@@ -192,19 +193,34 @@ class MagnifierWidget(QWidget):
         painter.setPen(highlight_pen)
         # Draw with pixel-perfect alignment - one pixel larger to right and bottom
         painter.drawRect(pixel_left, pixel_top, pixel_size + 1, pixel_size + 1)
-        
-        # Draw white crosshair guides extending across entire magnifier (full column/row coverage)
-        guide_pen = QPen(CaptiXColors.SUBTLE_WHITE_GUIDE, pixel_size + 1)  # White with moderate alpha, pixel_size - 1 thick
-        painter.setPen(guide_pen)
-        
-        # Vertical crosshair line covering full column (pixel_size - 1 thick)
+
+        # Draw edges around the crosshair guides (fully transparent interior, thicker edges)
+        # This creates a non-obstructive highlight by only showing the boundaries
+        edge_pen = QPen(CaptiXColors.SUBTLE_WHITE_GUIDE, 2)  # Thicker edge for visibility
+        painter.setPen(edge_pen)
+        painter.setBrush(Qt.BrushStyle.NoBrush)  # Fully transparent interior
+
+        # Vertical crosshair strip edges (covering full column height)
         center_pixel_x = pixel_left + pixel_size // 2
-        painter.drawLine(center_pixel_x, 0, center_pixel_x, self.MAGNIFIER_SIZE)
-        
-        # Horizontal crosshair line covering full row (pixel_size - 1 thick)
+        strip_width = pixel_size + 1  # Width of the crosshair strip
+        vertical_rect = QRect(
+            center_pixel_x - strip_width // 2,
+            0,
+            strip_width,
+            self.MAGNIFIER_SIZE
+        )
+        painter.drawRect(vertical_rect)
+
+        # Horizontal crosshair strip edges (covering full row width)
         center_pixel_y = pixel_top + pixel_size // 2
-        painter.drawLine(0, center_pixel_y, self.MAGNIFIER_SIZE, center_pixel_y)
-        
+        horizontal_rect = QRect(
+            0,
+            center_pixel_y - strip_width // 2,
+            self.MAGNIFIER_SIZE,
+            strip_width
+        )
+        painter.drawRect(horizontal_rect)
+
         # Draw outer border around the magnifier with dashed style
         border_pen = QPen(CaptiXColors.THEME_BLUE, 2)  # Same blue as UI theme
         border_pen.setStyle(Qt.PenStyle.DashDotLine)  # Dashed border
