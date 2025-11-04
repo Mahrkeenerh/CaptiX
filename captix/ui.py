@@ -569,7 +569,7 @@ class ScreenshotOverlay(QWidget):
                 # Show notification
                 try:
                     send_notification(
-                        "CaptiX Thread Timeout",
+                        "Thread Timeout",
                         "Screenshot overlay closed due to hung background operation",
                         urgency="critical"
                     )

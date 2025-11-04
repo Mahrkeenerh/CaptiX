@@ -239,7 +239,7 @@ loop.run()
             # Use D-Bus directly for clickable notification
             # This works even with older notify-send versions
             self._show_dbus_notification_with_action(
-                "Screenshot Saved!",
+                "CaptiX - Screenshot Saved!",
                 f"{size_str}\n{filepath}",
                 "camera-photo",
                 directory
@@ -282,7 +282,7 @@ loop.run()
         try:
             # Use D-Bus directly for clickable notification
             self._show_dbus_notification_with_action(
-                "Recording Saved!",
+                "CaptiX - Recording Saved!",
                 f"Duration: {duration} | {size_str}\n{filepath}",
                 "media-record",
                 directory
@@ -303,7 +303,7 @@ loop.run()
                     "-u", "normal",
                     "-t", str(NotificationTimeouts.ERROR_NOTIFICATION_MS),
                     "-a", "CaptiX",
-                    "Recording Aborted",
+                    "CaptiX - Recording Aborted",
                     "Recording was cancelled",
                 ],
                 stdout=subprocess.DEVNULL,
@@ -331,7 +331,7 @@ loop.run()
                     "-u", "critical",
                     "-t", str(NotificationTimeouts.NOTIFICATION_DISPLAY_MS),
                     "-a", "CaptiX",
-                    title,
+                    f"CaptiX - {title}",
                     message,
                 ],
                 stdout=subprocess.DEVNULL,
@@ -397,7 +397,7 @@ def send_notification(title: str, message: str, urgency: str = "normal", icon: s
                 "-u", urgency,
                 "-t", str(NotificationTimeouts.NOTIFICATION_DISPLAY_MS),
                 "-a", "CaptiX",
-                title,
+                f"CaptiX - {title}",
                 message,
             ],
             stdout=subprocess.DEVNULL,
