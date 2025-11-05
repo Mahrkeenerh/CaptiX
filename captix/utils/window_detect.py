@@ -9,6 +9,7 @@ This module handles X11 window detection and geometry calculation including:
 """
 
 import logging
+import time
 from typing import Tuple, Optional, List, NamedTuple
 from Xlib import display, X, Xatom
 from Xlib.error import BadWindow, BadMatch
@@ -142,6 +143,9 @@ class WindowDetector:
         Returns:
             WindowInfo object or None if no window found
         """
+        # Performance timing for hang diagnosis
+        detection_start = time.perf_counter()
+
         if exclude_window_id is None:
             # No exclusion needed, use regular detection
             return self.get_window_at_position(x, y)
@@ -150,7 +154,9 @@ class WindowDetector:
             # Get all child windows in Z-order (top to bottom)
             windows_in_stack = self._get_window_stack()
 
+            checked_windows = 0
             for window in windows_in_stack:
+                checked_windows += 1
                 try:
                     # Skip the excluded window
                     if window.id == exclude_window_id:
@@ -164,6 +170,12 @@ class WindowDetector:
                         # Get detailed window info
                         window_info = self._get_window_info(window)
                         if window_info:
+                            detection_time = time.perf_counter() - detection_start
+                            if detection_time > 0.050:
+                                logger.warning(
+                                    f"[X11] Window detection took {detection_time*1000:.1f}ms "
+                                    f"(checked {checked_windows} windows) - potential hang risk!"
+                                )
                             return window_info
 
                 except (BadWindow, BadMatch):
@@ -171,11 +183,19 @@ class WindowDetector:
                     continue
 
             # No window found, return root window info
+            detection_time = time.perf_counter() - detection_start
+            if detection_time > 0.050:
+                logger.warning(
+                    f"[X11] Window detection took {detection_time*1000:.1f}ms "
+                    f"(checked {checked_windows}/{len(windows_in_stack)} windows, no match)"
+                )
             return self._create_root_window_info()
 
         except Exception as e:
+            detection_time = time.perf_counter() - detection_start
             logger.error(
-                f"Failed to get window at position excluding {exclude_window_id}: {e}"
+                f"Failed to get window at position excluding {exclude_window_id} "
+                f"after {detection_time*1000:.1f}ms: {e}"
             )
             return None
 
@@ -187,9 +207,17 @@ class WindowDetector:
             List of X11 window objects in top-to-bottom order
         """
         try:
-            # Query all child windows of root
+            # Query all child windows of root - this is an X11 roundtrip
+            stack_start = time.perf_counter()
             result = self.root.query_tree()
             children = result.children
+            stack_time = time.perf_counter() - stack_start
+
+            # Log if X11 query_tree is slow
+            if stack_time > 0.050:
+                logger.warning(f"[X11] query_tree() took {stack_time*1000:.1f}ms - potential hang risk!")
+            elif stack_time > 0.010:
+                logger.debug(f"[X11] query_tree() took {stack_time*1000:.1f}ms ({len(children)} windows)")
 
             # Return in reverse order (top to bottom in Z-order)
             # X11 returns children in bottom-to-top order

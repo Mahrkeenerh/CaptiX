@@ -554,9 +554,20 @@ class ScreenshotOverlay(QWidget):
         """Update the external watchdog heartbeat to signal we're still responsive."""
         if self.external_watchdog:
             try:
+                heartbeat_start = time.perf_counter()
                 self.external_watchdog.update_heartbeat()
+                heartbeat_time = time.perf_counter() - heartbeat_start
+
+                # Log heartbeat updates (at debug level) to track event loop health
+                logger.debug(f"[HEARTBEAT] Watchdog heartbeat updated ({heartbeat_time*1000:.1f}ms)")
+
+                # Warn if heartbeat update itself is slow (file I/O should be fast)
+                if heartbeat_time > 0.010:
+                    logger.warning(
+                        f"[HEARTBEAT] Heartbeat update took {heartbeat_time*1000:.1f}ms - I/O may be slow"
+                    )
             except (OSError, IOError) as e:
-                logger.warning(f"Failed to update watchdog heartbeat: {e}")
+                logger.warning(f"[HEARTBEAT] Failed to update watchdog heartbeat: {e}")
 
     def _on_thread_watchdog(self):
         """Monitor background thread and force exit if it hangs."""
@@ -632,9 +643,22 @@ class ScreenshotOverlay(QWidget):
 
         try:
             # Get window beneath our overlay using stack walking
+            # Add timing to detect if X11 calls are blocking
+            detection_start = time.perf_counter()
             window_info = self.window_detector.get_window_at_position_excluding(
                 x, y, exclude_window_id=getattr(self, "overlay_window_id", None)
             )
+            detection_time = time.perf_counter() - detection_start
+
+            # Log if window detection is slow (>100ms could freeze event loop)
+            if detection_time > 0.100:
+                logger.warning(
+                    f"[PERF] Window detection at ({x},{y}) took {detection_time*1000:.1f}ms - potential hang risk!"
+                )
+            elif detection_time > 0.050:
+                logger.debug(
+                    f"[PERF] Window detection at ({x},{y}) took {detection_time*1000:.1f}ms"
+                )
 
             # Debug: Log the detected window information (only when it changes)
             if window_info != self.highlighted_window:
@@ -716,12 +740,17 @@ class ScreenshotOverlay(QWidget):
 
     def mouseMoveEvent(self, event):
         """Handle mouse move events for window highlighting and drag selection."""
+        # Performance timing to detect slow mouse handlers
+        mouse_start = time.perf_counter()
+
         # Convert local coordinates to global screen coordinates
         global_pos = self.mapToGlobal(event.position().toPoint())
 
         # Always update cursor position for crosshair guidelines
         self.cursor_x = global_pos.x()
         self.cursor_y = global_pos.y()
+
+        logger.debug(f"[MOUSE] Move event at ({self.cursor_x}, {self.cursor_y}), pressed={self.mouse_pressed}, dragging={self.is_dragging}")
 
         # Check if this might be the start of a drag operation
         if self.mouse_pressed and not self.is_dragging:
@@ -764,10 +793,19 @@ class ScreenshotOverlay(QWidget):
             self.last_crosshair_pos = current_crosshair_pos
             self.update()  # Repaint for crosshair guidelines
 
+        # Log if mouse event handling was slow
+        mouse_time = time.perf_counter() - mouse_start
+        if mouse_time > 0.050:
+            logger.warning(f"[PERF] mouseMoveEvent took {mouse_time*1000:.1f}ms - potential hang risk!")
+        elif mouse_time > 0.016:
+            logger.debug(f"[PERF] mouseMoveEvent took {mouse_time*1000:.1f}ms")
+
         super().mouseMoveEvent(event)
 
     def mousePressEvent(self, event: QMouseEvent):
         """Handle mouse press events - start of click or drag."""
+        logger.debug(f"[MOUSE] Press event: button={event.button()}")
+
         if event.button() == Qt.MouseButton.LeftButton:
             # Convert to global coordinates
             global_pos = self.mapToGlobal(event.position().toPoint())
@@ -777,7 +815,7 @@ class ScreenshotOverlay(QWidget):
             self.press_start_time = time.time()
             self.press_position = (global_pos.x(), global_pos.y())
 
-            logger.debug(f"Mouse pressed at global position: {self.press_position}")
+            logger.debug(f"[MOUSE] Left button pressed at global position: {self.press_position}")
 
             # Check what's under the cursor at press time
             if self.highlighted_window:
@@ -1112,26 +1150,53 @@ class ScreenshotOverlay(QWidget):
 
     def paintEvent(self, event: QPaintEvent):
         """Paint the overlay with frozen screen background, dark overlay, selection rectangle, and window highlight."""
+        # Performance timing for hang diagnosis
+        paint_start = time.perf_counter()
+
         painter = QPainter(self)
 
         # Draw background
+        bg_start = time.perf_counter()
         self._draw_frozen_background(painter)
+        bg_time = time.perf_counter() - bg_start
 
         # Draw dark overlay with exclusion logic
+        overlay_start = time.perf_counter()
         self._draw_dark_overlay_with_selection(painter)
+        overlay_time = time.perf_counter() - overlay_start
 
         # Draw window highlight (only when not dragging)
         alpha_value = int(self._overlay_opacity * 255)
+        highlight_time = 0
         if (
             self.highlighted_window
             and not self.highlighted_window.is_root
             and alpha_value > 0
             and not self.is_dragging
         ):
+            highlight_start = time.perf_counter()
             self.draw_window_highlight(painter)
+            highlight_time = time.perf_counter() - highlight_start
 
         # Draw crosshair guidelines
+        crosshair_start = time.perf_counter()
         self.draw_crosshair_guidelines(painter)
+        crosshair_time = time.perf_counter() - crosshair_start
+
+        # Log performance if paint took too long (>50ms could indicate issues)
+        total_time = time.perf_counter() - paint_start
+        if total_time > 0.050:
+            logger.warning(
+                f"[PERF] paintEvent took {total_time*1000:.1f}ms "
+                f"(bg:{bg_time*1000:.1f}ms, overlay:{overlay_time*1000:.1f}ms, "
+                f"highlight:{highlight_time*1000:.1f}ms, crosshair:{crosshair_time*1000:.1f}ms)"
+            )
+        elif total_time > 0.016:  # More than one frame at 60fps
+            logger.debug(
+                f"[PERF] paintEvent took {total_time*1000:.1f}ms "
+                f"(bg:{bg_time*1000:.1f}ms, overlay:{overlay_time*1000:.1f}ms, "
+                f"highlight:{highlight_time*1000:.1f}ms, crosshair:{crosshair_time*1000:.1f}ms)"
+            )
 
     def draw_window_highlight(self, painter: QPainter):
         """Draw highlight overlay over the currently highlighted window."""
@@ -1336,6 +1401,9 @@ class ScreenshotOverlay(QWidget):
 
     def showEvent(self, event):
         """Handle window show event."""
+        logger.info("[OVERLAY] showEvent triggered - overlay is being displayed")
+        show_start = time.perf_counter()
+
         super().showEvent(event)
 
         # Ensure window has focus to receive key events
@@ -1345,11 +1413,15 @@ class ScreenshotOverlay(QWidget):
 
         # Capture full screenshot IMMEDIATELY for instant display
         if not self._captures_complete and not self.frozen_screen:
-            logger.debug("Capturing full screenshot immediately...")
+            logger.info("[OVERLAY] Capturing full screenshot immediately...")
+            capture_start = time.perf_counter()
             self.capture_frozen_screen()
+            capture_time = time.perf_counter() - capture_start
+            logger.info(f"[OVERLAY] Full screenshot captured in {capture_time*1000:.1f}ms")
+
             # Trigger repaint to show frozen screen right away
             self.update()
-            logger.debug("Full screenshot captured, starting window captures in background")
+            logger.info("[OVERLAY] Starting window captures in background")
 
         # Start the fade-in animation now that the window is visible
         if self.fade_animation and self.fade_animation.state() != QPropertyAnimation.State.Running:
@@ -1362,9 +1434,10 @@ class ScreenshotOverlay(QWidget):
             self.thread_start_time = time.time()
             capture_thread = threading.Thread(target=self._do_window_captures, daemon=True)
             capture_thread.start()
-            logger.info("Started background window capture thread with watchdog monitoring")
+            logger.info("[OVERLAY] Started background window capture thread with watchdog monitoring")
 
-        logger.info("Overlay window shown and focused")
+        show_time = time.perf_counter() - show_start
+        logger.info(f"[OVERLAY] showEvent completed in {show_time*1000:.1f}ms - overlay ready for interaction")
 
     def _do_window_captures(self):
         """Perform window captures in background thread (full screenshot already done).
@@ -1375,16 +1448,27 @@ class ScreenshotOverlay(QWidget):
         becomes effectively read-only, so main thread can read without locks.
         """
         try:
+            logger.info("[THREAD] Background window capture thread started")
+            thread_start = time.perf_counter()
+
             with self._capture_lock:
                 # Full screenshot was already captured in showEvent
                 # Now capture individual windows
+                capture_start = time.perf_counter()
                 self.capture_all_windows()
+                capture_time = time.perf_counter() - capture_start
+                logger.info(f"[THREAD] Window captures completed in {capture_time*1000:.1f}ms")
+
                 self._captures_complete = True
                 # Clear thread start time to stop watchdog monitoring
                 self.thread_start_time = None
+
             # Signal completion (thread-safe)
             # After this signal, main thread can safely read captured_windows without locks
             self.captures_complete.emit()
+
+            total_time = time.perf_counter() - thread_start
+            logger.info(f"[THREAD] Background thread completed successfully in {total_time*1000:.1f}ms")
         except Exception as e:
             logger.error(f"Error in background window capture thread: {e}")
             # Clear thread start time even on error
