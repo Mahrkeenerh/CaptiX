@@ -151,13 +151,15 @@ while True:
 
                 # Try to send notification (fire-and-forget with Popen)
                 # Don't wait for it to complete - we need to kill immediately
+                # NOTE: Using 'normal' urgency instead of 'critical' to allow auto-dismiss.
+                # Many notification daemons ignore timeout for critical notifications.
                 log_and_print("Attempting to send notification (fire-and-forget)", 'INFO')
                 try:
                     subprocess.Popen(
                         [
                             "notify-send",
                             "-i", "dialog-warning",
-                            "-u", "critical",
+                            "-u", "normal",
                             "-t", "5000",
                             "-a", "CaptiX",
                             "CaptiX Watchdog",
