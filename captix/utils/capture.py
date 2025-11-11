@@ -13,6 +13,7 @@ This module handles all screen capture operations including:
 import os
 import ctypes
 import ctypes.util
+import threading
 from typing import Tuple, Optional, List
 from datetime import datetime
 from pathlib import Path
@@ -1006,6 +1007,9 @@ class ScreenCapture:
         """
         Save screenshot to file with timestamp naming.
 
+        Uses progressive save strategy: saves quickly without optimization first,
+        then re-optimizes in background for smaller file size.
+
         Args:
             image: PIL Image to save
             directory: Directory to save to (defaults to ~/Pictures/Screenshots)
@@ -1013,7 +1017,7 @@ class ScreenCapture:
             capture_type: Type of capture for suffix ('win', 'full', 'area')
 
         Returns:
-            Tuple of (filepath, file_size_bytes)
+            Tuple of (filepath, file_size_bytes) - size is from quick save
         """
         # Set default directory
         if directory is None:
@@ -1025,27 +1029,90 @@ class ScreenCapture:
         # Generate filename if not provided
         if filename is None:
             filename = CaptiXPaths.generate_screenshot_filename(capture_type)
-        
+
         # Ensure .png extension
         if not filename.lower().endswith('.png'):
             filename += '.png'
-        
+
         filepath = os.path.join(directory, filename)
-        
+
         try:
-            # Save as PNG
-            image.save(filepath, "PNG", optimize=True)
-            
-            # Get actual file size
+            # PROGRESSIVE SAVE STRATEGY:
+            # Step 1: Save quickly without optimization (instant save)
+            image.save(filepath, "PNG", optimize=False)
+
+            # Get initial file size from quick save
             file_size = os.path.getsize(filepath)
-            
-            logger.info(f"Screenshot saved: {filepath} ({file_size} bytes)")
+
+            logger.info(f"Screenshot saved (quick): {filepath} ({file_size} bytes)")
+
+            # Step 2: Launch background thread to re-optimize the file
+            # Use daemon thread so it doesn't block app exit
+            optimization_thread = threading.Thread(
+                target=self._optimize_screenshot_background,
+                args=(filepath, file_size),
+                daemon=True,
+                name=f"OptimizeScreenshot-{os.path.basename(filepath)}"
+            )
+            optimization_thread.start()
+            logger.debug(f"Background optimization started for {filepath}")
+
+            # Return immediately with quick-saved file
             return filepath, file_size
-            
+
         except (OSError, IOError, PermissionError) as e:
             logger.error(f"Failed to save screenshot to {filepath}: {e}")
             raise
-    
+
+    def _optimize_screenshot_background(self, filepath: str, original_size: int):
+        """
+        Re-optimize a screenshot file in the background.
+
+        This method runs in a background thread to compress the PNG file
+        without blocking the main application flow.
+
+        Args:
+            filepath: Path to the screenshot file to optimize
+            original_size: File size before optimization (for logging)
+        """
+        try:
+            # Verify file still exists
+            if not os.path.exists(filepath):
+                logger.debug(f"Skipping optimization - file no longer exists: {filepath}")
+                return
+
+            # Re-open and optimize the image
+            logger.debug(f"Starting optimization for {filepath}")
+            image = Image.open(filepath)
+
+            # Save with optimization enabled
+            # This will overwrite the quick-saved file with optimized version
+            image.save(filepath, "PNG", optimize=True)
+
+            # Get optimized file size
+            optimized_size = os.path.getsize(filepath)
+
+            # Calculate space saved
+            space_saved = original_size - optimized_size
+            percent_saved = (space_saved / original_size * 100) if original_size > 0 else 0
+
+            logger.info(
+                f"Screenshot optimized: {filepath} "
+                f"({original_size} -> {optimized_size} bytes, "
+                f"saved {space_saved} bytes / {percent_saved:.1f}%)"
+            )
+
+        except FileNotFoundError:
+            logger.debug(f"Optimization skipped - file deleted: {filepath}")
+        except PermissionError as e:
+            logger.warning(f"Optimization failed - permission denied: {filepath}: {e}")
+        except OSError as e:
+            # Catch disk full, I/O errors, etc.
+            logger.warning(f"Optimization failed - OS error for {filepath}: {e}")
+        except Exception as e:
+            # Catch any other unexpected errors (corrupted image, etc.)
+            logger.warning(f"Optimization failed for {filepath}: {e}")
+
     def cleanup(self):
         """Clean up X11 resources."""
         try:
