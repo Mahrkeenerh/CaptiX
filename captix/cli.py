@@ -229,7 +229,7 @@ def cmd_video_ui(args) -> int:
     overlay.recording_area_selected.connect(start_recording)
 
     # Show overlay
-    overlay.show()
+    overlay.showFullScreen()
 
     return app.exec()
 
