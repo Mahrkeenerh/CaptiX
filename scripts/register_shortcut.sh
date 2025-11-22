@@ -8,7 +8,7 @@ BIN_DIR="$HOME/.local/bin"
 # Define shortcuts: name, command, binding
 declare -A shortcuts
 shortcuts["CaptiX Screenshot"]="$BIN_DIR/captix --ui|<Ctrl><Shift>x"
-shortcuts["CaptiX Video Recording"]="$BIN_DIR/captix --video|<Ctrl><Shift>v"
+shortcuts["CaptiX Video Recording"]="$BIN_DIR/captix --video|<Super><Shift>x"
 
 # Get current custom keybindings list
 current_bindings=$(gsettings get org.gnome.settings-daemon.plugins.media-keys custom-keybindings)
@@ -97,5 +97,5 @@ fi
 echo ""
 echo "✓ Keyboard shortcuts registered:"
 echo "  Ctrl+Shift+X → Screenshot (captix --ui)"
-echo "  Ctrl+Shift+V → Video Recording (captix --video)"
+echo "  Super+Shift+X → Video Recording (captix --video)"
 echo "  Shortcuts work even without the daemon running"
