@@ -98,6 +98,134 @@ def cmd_screenshot(args) -> int:
         return 1
 
 
+def cmd_video_ui(args) -> int:
+    """Handle video recording with interactive UI."""
+    from PyQt6.QtWidgets import QApplication
+    from captix.ui import ScreenshotOverlay
+    from captix.utils.video_recorder import FFmpegRecorder, XCompositeRecorder
+    from captix.utils.recording_panel import RecordingControlPanel, RecordingAreaBorder
+    from captix.utils.notifications import notify_recording_saved
+    from captix.utils.paths import CaptiXPaths
+    from datetime import datetime
+
+    print("Launching video recording selection UI...")
+
+    app = QApplication(sys.argv)
+
+    # Create overlay in video mode
+    overlay = ScreenshotOverlay(video_mode=True)
+
+    # Storage for recorder and control panel
+    active_recorder = {'recorder': None, 'panel': None, 'border': None}
+
+    def start_recording(x, y, width, height, is_fullscreen, window_id, track_window):
+        """Start recording after area selection."""
+        try:
+            # Generate output filename
+            timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+            output_file = str(CaptiXPaths.get_video_dir() / f"rec_{timestamp}.mkv")
+
+            # Determine recorder type
+            if track_window and window_id:
+                # Use XComposite for window tracking
+                print(f"Starting window tracking recording (window ID: {window_id})...")
+                recorder = XCompositeRecorder()
+                success = recorder.start_window_tracking(
+                    window_id,
+                    output_file,
+                    fps=30,
+                    include_mic=False
+                )
+            else:
+                # Use FFmpeg x11grab for static area
+                print(f"Starting area recording: {width}x{height} at ({x},{y})...")
+                recorder = FFmpegRecorder()
+                success = recorder.start_area(
+                    x, y, width, height,
+                    output_file,
+                    fps=30,
+                    include_mic=False
+                )
+
+            if not success:
+                print("Failed to start recording")
+                app.quit()
+                return
+
+            # Create control panel
+            panel = RecordingControlPanel(
+                recorder,
+                (x, y, width, height),
+                is_fullscreen
+            )
+
+            # Create border (if not fullscreen)
+            border = None
+            if not is_fullscreen:
+                border = RecordingAreaBorder(x, y, width, height)
+                border.show()
+
+            # Connect stop/abort signals
+            def on_stop():
+                print("Stopping recording...")
+                final_path, file_size, duration = recorder.stop()
+
+                if final_path:
+                    print(f"Recording saved: {final_path}")
+                    print(f"Duration: {duration:.1f}s, Size: {file_size} bytes")
+
+                    # Format duration for notification (MM:SS)
+                    minutes = int(duration // 60)
+                    seconds = int(duration % 60)
+                    duration_str = f"{minutes}:{seconds:02d}"
+
+                    # Show notification
+                    try:
+                        notify_recording_saved(final_path, file_size, duration_str)
+                    except Exception as e:
+                        print(f"Warning: Failed to show notification: {e}")
+
+                # Cleanup
+                if border:
+                    border.close()
+                panel.close()
+                app.quit()
+
+            def on_abort():
+                print("Aborting recording...")
+                recorder.abort()
+
+                # Cleanup
+                if border:
+                    border.close()
+                panel.close()
+                app.quit()
+
+            panel.stop_requested.connect(on_stop)
+            panel.abort_requested.connect(on_abort)
+
+            panel.show()
+
+            # Store references
+            active_recorder['recorder'] = recorder
+            active_recorder['panel'] = panel
+            active_recorder['border'] = border
+
+        except Exception as e:
+            print(f"Error starting recording: {e}")
+            import traceback
+            traceback.print_exc()
+            app.quit()
+
+    # Connect selection signal
+    overlay.recording_area_selected.connect(start_recording)
+
+    # Show overlay
+    overlay.show()
+
+    return app.exec()
+
+
 def cmd_info(args) -> int:
     """Display system information."""
     from captix.utils.capture import ScreenCapture
@@ -258,6 +386,9 @@ Examples:
     parser.add_argument(
         "--ui", action="store_true", help="Launch interactive screenshot UI"
     )
+    parser.add_argument(
+        "--video", action="store_true", help="Launch interactive video recording UI"
+    )
     parser.add_argument('--info', action='store_true',
                        help='Show system information')
     parser.add_argument(
@@ -305,6 +436,8 @@ Examples:
         return cmd_screenshot(args)
     elif args.ui:
         return cmd_screenshot_ui(args)
+    elif args.video:
+        return cmd_video_ui(args)
     elif args.info:
         return cmd_info(args)
     elif args.list_windows:

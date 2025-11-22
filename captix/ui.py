@@ -129,8 +129,18 @@ class ScreenshotOverlay(QWidget):
     # Signal emitted when captures are complete
     captures_complete = pyqtSignal()
 
-    def __init__(self):
+    # Signal emitted when recording area is selected (video mode)
+    # Parameters: (x, y, width, height, is_fullscreen, window_id, track_window)
+    recording_area_selected = pyqtSignal(int, int, int, int, bool, int, bool)
+
+    def __init__(self, video_mode: bool = False):
+        """Initialize screenshot overlay.
+
+        Args:
+            video_mode: If True, overlay selects recording area instead of capturing
+        """
         super().__init__()
+        self.video_mode = video_mode
         self.frozen_screen: Optional[QPixmap] = None
         self.capture_system: Optional[ScreenCapture] = None
         self.window_detector: Optional[WindowDetector] = None
@@ -886,7 +896,7 @@ class ScreenshotOverlay(QWidget):
         try:
             # Use the window that was detected during mouse press
             if self.highlighted_window and not self.highlighted_window.is_root:
-                # Window was clicked - find the corresponding captured window
+                # Window was clicked
                 target_window_id = self.highlighted_window.window_id
 
                 if target_window_id in self.captured_windows:
@@ -895,7 +905,22 @@ class ScreenshotOverlay(QWidget):
                         f"Window click detected on: {captured_window.window_info.title}"
                     )
 
-                    if captured_window.image:
+                    if self.video_mode:
+                        # Video mode: emit recording area signal
+                        window_info = captured_window.window_info
+                        logger.info(f"Video mode: Selected window '{window_info.title}' for recording (tracking enabled)")
+                        self.recording_area_selected.emit(
+                            window_info.x,
+                            window_info.y,
+                            window_info.width,
+                            window_info.height,
+                            False,  # not fullscreen
+                            target_window_id,  # window ID for tracking
+                            True  # track window movement
+                        )
+                        self.close()
+                    elif captured_window.image:
+                        # Screenshot mode: capture and save
                         # Use pre-captured window content and existing save infrastructure
                         try:
                             final_path, file_size, cache_path = self.capture_system.save_screenshot(
@@ -917,10 +942,12 @@ class ScreenshotOverlay(QWidget):
                                 logger.warning(f"Failed to show notification: {e}")
                         except (OSError, IOError, PermissionError) as e:
                             logger.error(f"Failed to save window capture for '{captured_window.window_info.title}': {e}")
+                        self.close()
                     else:
                         logger.warning(
                             f"No image available for window: {captured_window.window_info.title}"
                         )
+                        self.close()
                 else:
                     logger.warning(
                         f"Clicked window (ID: {target_window_id}) not found in captured windows"
@@ -939,27 +966,39 @@ class ScreenshotOverlay(QWidget):
 
     def _capture_desktop(self):
         """Helper method to capture desktop using frozen image."""
-        logger.info("Desktop click detected - capturing full screen")
-        if self.frozen_full_image:
-            # Use pre-captured desktop content and existing save infrastructure
-            try:
-                final_path, file_size, cache_path = self.capture_system.save_screenshot(
-                    self.frozen_full_image, capture_type="full"
-                )
-                # Copy to clipboard using cache path (stable reference)
-                if copy_image_to_clipboard(cache_path):
-                    logger.info(f"Full desktop capture completed ({file_size} bytes)")
-                else:
-                    logger.warning("Failed to copy desktop capture to clipboard")
-                # Show notification with sound (use final path for display)
-                try:
-                    notify_screenshot_saved(final_path, file_size)
-                except Exception as e:
-                    logger.warning(f"Failed to show notification: {e}")
-            except (OSError, IOError, PermissionError) as e:
-                logger.error(f"Failed to save desktop capture: {e}")
+        if self.video_mode:
+            # Video mode: emit fullscreen recording signal
+            logger.info("Video mode: Selected fullscreen for recording")
+            geom = self.capture_system.get_screen_geometry()
+            self.recording_area_selected.emit(
+                geom[0], geom[1], geom[2], geom[3],
+                True,  # is fullscreen
+                0,  # no window ID
+                False  # no tracking
+            )
         else:
-            logger.error("No frozen desktop image available")
+            # Screenshot mode: capture desktop
+            logger.info("Desktop click detected - capturing full screen")
+            if self.frozen_full_image:
+                # Use pre-captured desktop content and existing save infrastructure
+                try:
+                    final_path, file_size, cache_path = self.capture_system.save_screenshot(
+                        self.frozen_full_image, capture_type="full"
+                    )
+                    # Copy to clipboard using cache path (stable reference)
+                    if copy_image_to_clipboard(cache_path):
+                        logger.info(f"Full desktop capture completed ({file_size} bytes)")
+                    else:
+                        logger.warning("Failed to copy desktop capture to clipboard")
+                    # Show notification with sound (use final path for display)
+                    try:
+                        notify_screenshot_saved(final_path, file_size)
+                    except Exception as e:
+                        logger.warning(f"Failed to show notification: {e}")
+                except (OSError, IOError, PermissionError) as e:
+                    logger.error(f"Failed to save desktop capture: {e}")
+            else:
+                logger.error("No frozen desktop image available")
 
     def handle_drag_complete(self, start_pos: tuple, end_pos: tuple):
         """Handle completed drag selection for area capture using pre-captured content."""
@@ -986,34 +1025,45 @@ class ScreenshotOverlay(QWidget):
                 f"Area selection: ({left}, {top}) to ({right}, {bottom}) - {width}x{height}"
             )
 
-            # Use pre-captured desktop content for cropping
-            if self.frozen_full_image:
-                # Crop the selected area from frozen image
-                # Add 1 pixel to right and bottom to include the current selected pixel
-                try:
-                    cropped_image = self.frozen_full_image.crop(
-                        (left, top, right + 1, bottom + 1)
-                    )
-                    # Use existing save infrastructure
-                    final_path, file_size, cache_path = self.capture_system.save_screenshot(
-                        cropped_image, capture_type="area"
-                    )
-                    # Copy to clipboard using cache path (stable reference)
-                    if copy_image_to_clipboard(cache_path):
-                        logger.info(
-                            f"Area capture completed: {width}x{height} pixels ({file_size} bytes)"
-                        )
-                    else:
-                        logger.warning("Failed to copy area capture to clipboard")
-                    # Show notification with sound (use final path for display)
-                    try:
-                        notify_screenshot_saved(final_path, file_size)
-                    except Exception as e:
-                        logger.warning(f"Failed to show notification: {e}")
-                except (OSError, IOError, PermissionError) as e:
-                    logger.error(f"Failed to save area capture ({width}x{height} pixels): {e}")
+            if self.video_mode:
+                # Video mode: emit recording area signal
+                logger.info(f"Video mode: Selected custom area {width}x{height} for recording")
+                self.recording_area_selected.emit(
+                    left, top, width, height,
+                    False,  # not fullscreen
+                    0,  # no window ID
+                    False  # no tracking
+                )
             else:
-                logger.error("No frozen desktop image available for area capture")
+                # Screenshot mode: capture and save
+                # Use pre-captured desktop content for cropping
+                if self.frozen_full_image:
+                    # Crop the selected area from frozen image
+                    # Add 1 pixel to right and bottom to include the current selected pixel
+                    try:
+                        cropped_image = self.frozen_full_image.crop(
+                            (left, top, right + 1, bottom + 1)
+                        )
+                        # Use existing save infrastructure
+                        final_path, file_size, cache_path = self.capture_system.save_screenshot(
+                            cropped_image, capture_type="area"
+                        )
+                        # Copy to clipboard using cache path (stable reference)
+                        if copy_image_to_clipboard(cache_path):
+                            logger.info(
+                                f"Area capture completed: {width}x{height} pixels ({file_size} bytes)"
+                            )
+                        else:
+                            logger.warning("Failed to copy area capture to clipboard")
+                        # Show notification with sound (use final path for display)
+                        try:
+                            notify_screenshot_saved(final_path, file_size)
+                        except Exception as e:
+                            logger.warning(f"Failed to show notification: {e}")
+                    except (OSError, IOError, PermissionError) as e:
+                        logger.error(f"Failed to save area capture ({width}x{height} pixels): {e}")
+                else:
+                    logger.error("No frozen desktop image available for area capture")
 
             self.close()
 
