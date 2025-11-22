@@ -134,7 +134,8 @@ class AudioSystem:
             args.extend([
                 '-f', 'pulse', '-i', 'default',  # System audio
                 '-f', 'pulse', '-i', self.microphone,  # Microphone
-                '-filter_complex', '[0:a][1:a]amix=inputs=2:duration=first[a]',
+                '-filter_complex', '[1:a][2:a]amix=inputs=2:duration=first[a]',
+                '-map', '0:v',  # Map video from input 0 (x11grab)
                 '-map', '[a]',  # Use mixed audio
             ])
             logger.info("Recording with system audio + microphone")
