@@ -143,12 +143,92 @@ class XComposite:
             logger.error(f"Failed to get window pixmap: {e}")
             return None
 
+    def redirect_window(self, window_id: int):
+        """Redirect window to off-screen buffer for video capture.
+
+        Args:
+            window_id: X11 window ID to redirect
+        """
+        try:
+            # CompositeRedirectAutomatic = 1
+            self.xcomposite.XCompositeRedirectWindow(self.display, window_id, 1)
+            logger.debug(f"Redirected window {window_id} to off-screen buffer")
+        except Exception as e:
+            logger.error(f"Failed to redirect window: {e}")
+            raise
+
     def unredirect_window(self, window_id: int):
         """Stop redirecting window to off-screen buffer."""
         try:
             self.xcomposite.XCompositeUnredirectWindow(self.display, window_id, 1)
         except Exception as e:
             logger.warning(f"Failed to unredirect window: {e}")
+
+    def capture_frame_raw(self, window_id: int, width: int, height: int) -> Optional[bytes]:
+        """Capture raw frame data from XComposite window pixmap for video encoding.
+
+        Args:
+            window_id: X11 window ID
+            width: Frame width (should be even)
+            height: Frame height (should be even)
+
+        Returns:
+            Raw BGR24 frame data as bytes, or None on error
+        """
+        try:
+            # Get window pixmap (off-screen buffer)
+            pixmap = self.xcomposite.XCompositeNameWindowPixmap(self.display, window_id)
+            if not pixmap:
+                logger.warning(f"Failed to get pixmap for window {window_id}")
+                return None
+
+            # Capture image from pixmap using XGetImage
+            # ZPixmap = 2, AllPlanes = 0xFFFFFFFF
+            ximage = self.xlib.XGetImage(
+                self.display,
+                pixmap,
+                0, 0,  # x, y offset
+                width, height,
+                0xFFFFFFFF,  # AllPlanes
+                2  # ZPixmap
+            )
+
+            if not ximage:
+                logger.warning("XGetImage returned NULL")
+                return None
+
+            # XImage structure (simplified)
+            # We need to read the data pointer from the XImage structure
+            # Offset 96 bytes into XImage structure is the data pointer (x86_64)
+            data_ptr = ctypes.cast(ximage + 96, ctypes.POINTER(ctypes.c_void_p)).contents
+
+            # Calculate frame size (BGR24 = 3 bytes per pixel)
+            frame_size = width * height * 3
+
+            # Read raw pixel data
+            # XGetImage returns data in server's byte order (typically BGRX or BGRA)
+            # We need BGR24 for FFmpeg, so we need to convert
+
+            # For now, assume 32-bit depth (BGRA) and strip alpha channel
+            # This is a simplified version - production code should handle different depths
+            raw_data = ctypes.cast(data_ptr, ctypes.POINTER(ctypes.c_ubyte * (width * height * 4)))
+            bgra_data = raw_data.contents
+
+            # Convert BGRA to BGR24
+            bgr24_data = bytearray(frame_size)
+            for i in range(width * height):
+                bgr24_data[i * 3] = bgra_data[i * 4]      # B
+                bgr24_data[i * 3 + 1] = bgra_data[i * 4 + 1]  # G
+                bgr24_data[i * 3 + 2] = bgra_data[i * 4 + 2]  # R
+
+            # Free pixmap (important!)
+            self.xlib.XFreePixmap(self.display, pixmap)
+
+            return bytes(bgr24_data)
+
+        except Exception as e:
+            logger.error(f"Failed to capture frame: {e}")
+            return None
 
     def close(self):
         if hasattr(self, "display") and self.display:
