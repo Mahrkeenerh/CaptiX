@@ -1071,8 +1071,8 @@ class ScreenshotOverlay(QWidget):
             logger.error(f"Error in handle_drag_complete: {e}")
             self.close()
 
-    def _draw_frozen_background(self, painter: QPainter):
-        """Draw the frozen screen background or fallback."""
+    def _draw_background(self, painter: QPainter):
+        """Draw the overlay background (frozen screenshot, transparent, or fallback)."""
         if self.frozen_screen:
             painter.drawPixmap(self.rect(), self.frozen_screen, self.frozen_screen.rect())
             logger.debug("Frozen screen background drawn")
@@ -1202,7 +1202,7 @@ class ScreenshotOverlay(QWidget):
             logger.debug(f"Dark overlay layer drawn ({self._overlay_opacity:.1%} opacity, alpha={alpha_value})")
 
     def paintEvent(self, event: QPaintEvent):
-        """Paint the overlay with frozen screen background, dark overlay, selection rectangle, and window highlight."""
+        """Paint the overlay with background, dark overlay, selection rectangle, and window highlight."""
         # Performance timing for hang diagnosis
         paint_start = time.perf_counter()
 
@@ -1210,7 +1210,7 @@ class ScreenshotOverlay(QWidget):
 
         # Draw background
         bg_start = time.perf_counter()
-        self._draw_frozen_background(painter)
+        self._draw_background(painter)
         bg_time = time.perf_counter() - bg_start
 
         # Draw dark overlay with exclusion logic
