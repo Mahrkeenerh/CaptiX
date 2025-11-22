@@ -121,9 +121,17 @@ def cmd_video_ui(args) -> int:
     def start_recording(x, y, width, height, is_fullscreen, window_id, track_window):
         """Start recording after area selection."""
         try:
-            # Generate output filename
+            # Determine capture type suffix (same convention as screenshots)
+            if is_fullscreen:
+                capture_type = "full"
+            elif window_id:
+                capture_type = "win"
+            else:
+                capture_type = "area"
+
+            # Generate output filename with type suffix
             timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
-            output_file = str(CaptiXPaths.get_video_dir() / f"rec_{timestamp}.mkv")
+            output_file = str(CaptiXPaths.get_video_dir() / f"rec_{timestamp}_{capture_type}.mkv")
 
             # Determine recorder type
             if track_window and window_id:
