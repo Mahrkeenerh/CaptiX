@@ -133,7 +133,7 @@ def cmd_video_ui(args) -> int:
 
             # Generate output filename with type suffix
             timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
-            output_file = str(CaptiXPaths.get_video_dir() / f"rec_{timestamp}_{capture_type}.mkv")
+            output_file = str(Path(CaptiXPaths.get_videos_dir()) / f"rec_{timestamp}_{capture_type}.mkv")
 
             # Determine recorder type
             if track_window and window_id:
