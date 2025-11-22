@@ -899,27 +899,28 @@ class ScreenshotOverlay(QWidget):
                 # Window was clicked
                 target_window_id = self.highlighted_window.window_id
 
-                if target_window_id in self.captured_windows:
+                # In video mode, use highlighted_window directly (captured_windows is empty)
+                if self.video_mode:
+                    window_info = self.highlighted_window
+                    logger.info(f"Video mode: Selected window '{window_info.title}' for recording (tracking enabled)")
+                    self.recording_area_selected.emit(
+                        window_info.x,
+                        window_info.y,
+                        window_info.width,
+                        window_info.height,
+                        False,  # not fullscreen
+                        target_window_id,  # window ID for tracking
+                        True  # track window movement
+                    )
+                    self.close()
+                elif target_window_id in self.captured_windows:
+                    # Screenshot mode: use pre-captured window content
                     captured_window = self.captured_windows[target_window_id]
                     logger.debug(
                         f"Window click detected on: {captured_window.window_info.title}"
                     )
 
-                    if self.video_mode:
-                        # Video mode: emit recording area signal
-                        window_info = captured_window.window_info
-                        logger.info(f"Video mode: Selected window '{window_info.title}' for recording (tracking enabled)")
-                        self.recording_area_selected.emit(
-                            window_info.x,
-                            window_info.y,
-                            window_info.width,
-                            window_info.height,
-                            False,  # not fullscreen
-                            target_window_id,  # window ID for tracking
-                            True  # track window movement
-                        )
-                        self.close()
-                    elif captured_window.image:
+                    if captured_window.image:
                         # Screenshot mode: capture and save
                         # Use pre-captured window content and existing save infrastructure
                         try:

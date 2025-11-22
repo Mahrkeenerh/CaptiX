@@ -100,6 +100,7 @@ def cmd_screenshot(args) -> int:
 
 def cmd_video_ui(args) -> int:
     """Handle video recording with interactive UI."""
+    import subprocess
     from PyQt6.QtWidgets import QApplication
     from captix.ui import ScreenshotOverlay
     from captix.utils.video_recorder import FFmpegRecorder, XCompositeRecorder
@@ -120,6 +121,7 @@ def cmd_video_ui(args) -> int:
 
     def start_recording(x, y, width, height, is_fullscreen, window_id, track_window):
         """Start recording after area selection."""
+        print(f"start_recording called: {width}x{height} at ({x},{y}), fullscreen={is_fullscreen}, window_id={window_id}, track={track_window}")
         try:
             # Determine capture type suffix (same convention as screenshots)
             if is_fullscreen:
@@ -157,6 +159,17 @@ def cmd_video_ui(args) -> int:
 
             if not success:
                 print("Failed to start recording")
+                # Show error notification to user
+                try:
+                    subprocess.run([
+                        'notify-send',
+                        '-u', 'critical',
+                        '-i', 'error',
+                        'CaptiX Recording Failed',
+                        'Failed to start video recording. Check if FFmpeg is installed.'
+                    ])
+                except:
+                    pass
                 app.quit()
                 return
 
@@ -214,6 +227,18 @@ def cmd_video_ui(args) -> int:
 
             panel.show()
 
+            # Notify user that recording started
+            try:
+                subprocess.run([
+                    'notify-send',
+                    '-u', 'low',
+                    '-i', 'media-record',
+                    'CaptiX Recording',
+                    f'Recording started: {capture_type}'
+                ])
+            except:
+                pass
+
             # Store references
             active_recorder['recorder'] = recorder
             active_recorder['panel'] = panel
@@ -223,13 +248,24 @@ def cmd_video_ui(args) -> int:
             print(f"Error starting recording: {e}")
             import traceback
             traceback.print_exc()
+            # Show error notification to user
+            try:
+                subprocess.run([
+                    'notify-send',
+                    '-u', 'critical',
+                    '-i', 'error',
+                    'CaptiX Recording Error',
+                    f'Error starting recording: {str(e)}'
+                ])
+            except:
+                pass
             app.quit()
 
     # Connect selection signal
     overlay.recording_area_selected.connect(start_recording)
 
     # Show overlay
-    overlay.show()
+    overlay.showFullScreen()
 
     return app.exec()
 

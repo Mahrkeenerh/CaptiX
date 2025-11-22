@@ -134,6 +134,7 @@ class WindowDetector:
         Get the topmost window at the specified screen coordinates, excluding specified window IDs.
 
         This method walks the X11 window stack to find windows beneath excluded windows.
+        Only returns windows on the current workspace.
 
         Args:
             x: X coordinate in screen space
@@ -151,6 +152,9 @@ class WindowDetector:
             return self.get_window_at_position(x, y)
 
         try:
+            # Get current workspace for filtering
+            current_workspace = self.get_current_workspace()
+
             # Get all child windows in Z-order (top to bottom)
             windows_in_stack = self._get_window_stack()
 
@@ -170,6 +174,15 @@ class WindowDetector:
                         # Get detailed window info
                         window_info = self._get_window_info(window)
                         if window_info:
+                            # Filter by workspace - only include windows on current workspace
+                            if current_workspace is not None:
+                                window_workspace = self.get_window_workspace(window)
+                                if window_workspace is not None and window_workspace != current_workspace:
+                                    logger.debug(
+                                        f"Skipping window {window_info.title}: workspace {window_workspace} != current {current_workspace}"
+                                    )
+                                    continue
+
                             detection_time = time.perf_counter() - detection_start
                             if detection_time > 0.050:
                                 logger.warning(
