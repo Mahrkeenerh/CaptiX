@@ -144,7 +144,7 @@ class FFmpegRecorder:
         """
         # Get window geometry
         window_detector = WindowDetector()
-        windows = window_detector.list_visible_windows()
+        windows = window_detector.get_visible_windows()
 
         window_info = None
         for win in windows:
@@ -352,7 +352,7 @@ class XCompositeRecorder(FFmpegRecorder):
 
         # Get window info
         window_detector = WindowDetector()
-        windows = window_detector.list_visible_windows()
+        windows = window_detector.get_visible_windows()
 
         window_info = None
         for win in windows:
