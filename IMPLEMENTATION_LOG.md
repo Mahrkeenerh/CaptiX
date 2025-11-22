@@ -126,21 +126,87 @@ Tracks implementation progress through all development phases.
 
 ---
 
-## Phase 6: FFmpeg Integration & Video Recording - PLANNED
+## Phase 6: FFmpeg Integration & Video Recording ✅
 
-**Goals:**
-- FFmpeg wrapper for screen recording
-- Audio capture (PulseAudio/PipeWire)
-- Reuse screenshot UI for area selection
+**Date:** November 22, 2025
+**Commit:** `9d5a9d0`
+
+**Completed:**
+- FFmpeg x11grab wrapper for static area recording
+- XComposite-based window tracking recorder
+- Audio system detection (PulseAudio/PipeWire)
+- Automatic audio source detection with fallback
+- Video recording with system audio capture
+- Threaded frame capture loop (30 FPS)
+- H.264 encoding with ultrafast preset
+- MKV container format
+
+**New Files:**
+- `captix/utils/audio_detect.py` - Audio backend detection and FFmpeg args builder
+- `captix/utils/video_recorder.py` - FFmpegRecorder + XCompositeRecorder classes
+
+**Technical Implementation:**
+- **FFmpegRecorder**: Static area recording using x11grab
+  - Fullscreen, custom area, and window recording modes
+  - Subprocess management with graceful shutdown
+  - Real-time file size monitoring
+- **XCompositeRecorder**: Window tracking recording
+  - Redirects window to off-screen pixmap
+  - Captures frames in background thread
+  - Pipes raw BGR24 frames to FFmpeg stdin
+  - Window follows movement automatically
+
+**Integration:**
+- Extended `ScreenshotOverlay` with `video_mode` parameter
+- Added `recording_area_selected` signal
+- Modified click/drag handlers to emit area geometry
+- CLI command: `captix --video`
 
 ---
 
-## Phase 7: Recording Control Panel & Daemon - PLANNED
+## Phase 7: Recording Control Panel & System Tray ✅
 
-**Goals:**
-- Floating control panel with timer and file size
-- Background daemon for recording state management
-- Stop/Abort buttons and area indicators
+**Date:** November 22, 2025
+**Commit:** `9d5a9d0`
+
+**Completed:**
+- Floating control panel with PyQt6
+- System tray icon integration
+- Real-time timer display (HH:MM:SS)
+- File size monitoring (~XXX MB)
+- Pulsing recording indicator
+- Stop/Abort buttons with styled UI
+- Recording area border overlay
+- Desktop notifications for recordings
+
+**New Files:**
+- `captix/utils/recording_panel.py` - RecordingControlPanel + RecordingAreaBorder
+
+**Technical Implementation:**
+- **RecordingControlPanel**: Floating always-on-top window
+  - QTimer-based updates (1 second interval)
+  - Pulsing red dot indicator (500ms interval)
+  - Styled buttons (green Stop, red Abort)
+  - System tray icon with context menu
+  - Signal-based communication (stop_requested, abort_requested)
+- **RecordingAreaBorder**: Transparent overlay window
+  - Static red border (3px thick, semi-transparent)
+  - Shows recording area for non-fullscreen recordings
+  - Doesn't follow window movement
+  - X11BypassWindowManagerHint for transparency
+
+**Features:**
+- System tray icon with tooltip showing recording stats
+- Right-click context menu (Show Panel, Stop, Abort)
+- Clean shutdown on stop (graceful FFmpeg termination)
+- File deletion on abort
+- Duration and file size in notifications
+
+**Architecture Decision:**
+- No background daemon needed (unlike original plan)
+- Control panel spawned on-demand during recording
+- System tray provides non-intrusive monitoring
+- All state managed within recorder instances
 
 ---
 
