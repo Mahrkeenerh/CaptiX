@@ -1071,11 +1071,14 @@ class ScreenshotOverlay(QWidget):
             logger.error(f"Error in handle_drag_complete: {e}")
             self.close()
 
-    def _draw_frozen_background(self, painter: QPainter):
-        """Draw the frozen screen background or fallback."""
+    def _draw_background(self, painter: QPainter):
+        """Draw the overlay background (frozen screenshot, transparent, or fallback)."""
         if self.frozen_screen:
             painter.drawPixmap(self.rect(), self.frozen_screen, self.frozen_screen.rect())
             logger.debug("Frozen screen background drawn")
+        elif self.video_mode:
+            # Video mode: fully transparent background to show live desktop
+            painter.fillRect(self.rect(), QColor(0, 0, 0, 0))
         else:
             painter.fillRect(self.rect(), QColor(128, 128, 128, 50))
             logger.warning("No frozen screen available, using fallback background")
@@ -1199,7 +1202,7 @@ class ScreenshotOverlay(QWidget):
             logger.debug(f"Dark overlay layer drawn ({self._overlay_opacity:.1%} opacity, alpha={alpha_value})")
 
     def paintEvent(self, event: QPaintEvent):
-        """Paint the overlay with frozen screen background, dark overlay, selection rectangle, and window highlight."""
+        """Paint the overlay with background, dark overlay, selection rectangle, and window highlight."""
         # Performance timing for hang diagnosis
         paint_start = time.perf_counter()
 
@@ -1207,7 +1210,7 @@ class ScreenshotOverlay(QWidget):
 
         # Draw background
         bg_start = time.perf_counter()
-        self._draw_frozen_background(painter)
+        self._draw_background(painter)
         bg_time = time.perf_counter() - bg_start
 
         # Draw dark overlay with exclusion logic
@@ -1461,30 +1464,40 @@ class ScreenshotOverlay(QWidget):
         self.activateWindow()
         self.raise_()
 
-        # Capture full screenshot IMMEDIATELY for instant display
-        if not self._captures_complete and not self.frozen_screen:
-            logger.info("[OVERLAY] Capturing full screenshot immediately...")
-            capture_start = time.perf_counter()
-            self.capture_frozen_screen()
-            capture_time = time.perf_counter() - capture_start
-            logger.info(f"[OVERLAY] Full screenshot captured in {capture_time*1000:.1f}ms")
+        # In video mode, skip screen/window captures - we only need selection overlay
+        if self.video_mode:
+            logger.info("[OVERLAY] Video mode: Skipping screen capture, showing transparent selection overlay")
+            # Initialize capture system for geometry queries only
+            self.capture_system = ScreenCapture()
+            # Initialize window detector for window selection
+            if not self.window_detector:
+                self.window_detector = WindowDetector()
+            self._captures_complete = True  # No captures needed in video mode
+        else:
+            # Screenshot mode: Capture full screenshot IMMEDIATELY for instant display
+            if not self._captures_complete and not self.frozen_screen:
+                logger.info("[OVERLAY] Capturing full screenshot immediately...")
+                capture_start = time.perf_counter()
+                self.capture_frozen_screen()
+                capture_time = time.perf_counter() - capture_start
+                logger.info(f"[OVERLAY] Full screenshot captured in {capture_time*1000:.1f}ms")
 
-            # Trigger repaint to show frozen screen right away
-            self.update()
-            logger.info("[OVERLAY] Starting window captures in background")
+                # Trigger repaint to show frozen screen right away
+                self.update()
+                logger.info("[OVERLAY] Starting window captures in background")
+
+            # Capture windows in background thread (after full screenshot is done)
+            if not self._captures_complete:
+                # Set thread start time for watchdog monitoring
+                self.thread_start_time = time.time()
+                capture_thread = threading.Thread(target=self._do_window_captures, daemon=True)
+                capture_thread.start()
+                logger.info("[OVERLAY] Started background window capture thread with watchdog monitoring")
 
         # Start the fade-in animation now that the window is visible
         if self.fade_animation and self.fade_animation.state() != QPropertyAnimation.State.Running:
             self.fade_animation.start()
             logger.info("Fade-in animation started")
-
-        # Capture windows in background thread (after full screenshot is done)
-        if not self._captures_complete:
-            # Set thread start time for watchdog monitoring
-            self.thread_start_time = time.time()
-            capture_thread = threading.Thread(target=self._do_window_captures, daemon=True)
-            capture_thread.start()
-            logger.info("[OVERLAY] Started background window capture thread with watchdog monitoring")
 
         show_time = time.perf_counter() - show_start
         logger.info(f"[OVERLAY] showEvent completed in {show_time*1000:.1f}ms - overlay ready for interaction")
