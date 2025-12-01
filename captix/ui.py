@@ -59,7 +59,6 @@ logger = logging.getLogger(__name__)
 
 # Failsafe configuration
 FAILSAFE_WATCHDOG_TIMEOUT_SECONDS = 5  # External watchdog timeout for complete freezes
-FAILSAFE_THREAD_TIMEOUT_SECONDS = 5  # Max time for background thread operations
 
 
 class UIConstants:
@@ -188,8 +187,6 @@ class ScreenshotOverlay(QWidget):
         self.magnifier: Optional[MagnifierWidget] = None
 
         # Failsafe timers
-        self.thread_watchdog_timer: Optional[QTimer] = None
-        self.thread_start_time: Optional[float] = None
         self.heartbeat_timer: Optional[QTimer] = None  # For external watchdog
 
         # External watchdog (works even if Qt event loop freezes)
@@ -541,12 +538,6 @@ class ScreenshotOverlay(QWidget):
 
     def setup_failsafe_timers(self):
         """Initialize all failsafe timers and watchdogs."""
-        # Thread watchdog timer - monitors background thread execution
-        self.thread_watchdog_timer = QTimer(self)
-        self.thread_watchdog_timer.timeout.connect(self._on_thread_watchdog)
-        self.thread_watchdog_timer.start(UIConstants.WATCHDOG_CHECK_INTERVAL_MS)  # Check every second
-        logger.debug(f"Thread watchdog failsafe enabled: {FAILSAFE_THREAD_TIMEOUT_SECONDS}s max thread time")
-
         # External watchdog - CRITICAL: This works even if Qt event loop freezes
         try:
             self.external_watchdog = ExternalWatchdog(timeout_seconds=FAILSAFE_WATCHDOG_TIMEOUT_SECONDS)
@@ -579,59 +570,7 @@ class ScreenshotOverlay(QWidget):
             except (OSError, IOError) as e:
                 logger.warning(f"[HEARTBEAT] Failed to update watchdog heartbeat: {e}")
 
-    def _on_thread_watchdog(self):
-        """Monitor background thread and force exit if it hangs."""
-        if self.thread_start_time is not None and not self._captures_complete:
-            elapsed = time.time() - self.thread_start_time
-            if elapsed >= FAILSAFE_THREAD_TIMEOUT_SECONDS:
-                logger.warning(
-                    f"FAILSAFE: Background thread timeout after {elapsed:.1f}s - forcing exit"
-                )
-                # Show notification
-                try:
-                    send_notification(
-                        "Thread Timeout",
-                        "Screenshot overlay closed due to hung background operation",
-                        urgency="critical"
-                    )
-                except Exception as e:
-                    logger.warning(f"Failed to show thread timeout notification: {e}")
-                self._force_exit("Thread timeout")
 
-    def _force_exit(self, reason: str = "Emergency exit"):
-        """Force immediate exit of the overlay with cleanup."""
-        logger.warning(f"FORCE EXIT triggered: {reason}")
-        try:
-            # Stop all timers immediately
-            # Note: auto_timeout_timer was removed in commit a46a066 (redundant failsafe)
-            if self.thread_watchdog_timer:
-                self.thread_watchdog_timer.stop()
-            if self.fade_animation:
-                self.fade_animation.stop()
-
-            # Hide magnifier (best effort during emergency cleanup)
-            if self.magnifier:
-                try:
-                    self.magnifier.hide_magnifier()
-                    self.magnifier.close()
-                except Exception:
-                    # Intentionally silenced - magnifier cleanup is best-effort during emergency exit
-                    # Any errors are caught and logged by the outer exception handler below
-                    pass
-
-            # Force close window
-            self.close()
-
-            # Quit application
-            app = QApplication.instance()
-            if app:
-                app.quit()
-
-        except Exception as e:
-            logger.error(f"Error during force exit: {e}")
-            # Last resort - call os._exit to terminate immediately
-            import os
-            os._exit(1)
 
     def update_window_highlight(self, x: int, y: int):
         """Update window highlighting based on cursor position."""
@@ -1489,11 +1428,9 @@ class ScreenshotOverlay(QWidget):
 
             # Capture windows in background thread (after full screenshot is done)
             if not self._captures_complete:
-                # Set thread start time for watchdog monitoring
-                self.thread_start_time = time.time()
                 capture_thread = threading.Thread(target=self._do_window_captures, daemon=True)
                 capture_thread.start()
-                logger.info("[OVERLAY] Started background window capture thread with watchdog monitoring")
+                logger.info("[OVERLAY] Started background window capture thread")
 
         # Start the fade-in animation now that the window is visible
         if self.fade_animation and self.fade_animation.state() != QPropertyAnimation.State.Running:
@@ -1524,8 +1461,6 @@ class ScreenshotOverlay(QWidget):
                 logger.info(f"[THREAD] Window captures completed in {capture_time*1000:.1f}ms")
 
                 self._captures_complete = True
-                # Clear thread start time to stop watchdog monitoring
-                self.thread_start_time = None
 
             # Signal completion (thread-safe)
             # After this signal, main thread can safely read captured_windows without locks
@@ -1535,8 +1470,6 @@ class ScreenshotOverlay(QWidget):
             logger.info(f"[THREAD] Background thread completed successfully in {total_time*1000:.1f}ms")
         except Exception as e:
             logger.error(f"Error in background window capture thread: {e}")
-            # Clear thread start time even on error
-            self.thread_start_time = None
 
     def _on_captures_complete(self):
         """Handle capture completion in main thread."""
@@ -1548,10 +1481,6 @@ class ScreenshotOverlay(QWidget):
         logger.info("Overlay window closing")
 
         # Stop failsafe timers first
-        if self.thread_watchdog_timer:
-            self.thread_watchdog_timer.stop()
-            self.thread_watchdog_timer = None
-
         if self.heartbeat_timer:
             self.heartbeat_timer.stop()
             self.heartbeat_timer = None
