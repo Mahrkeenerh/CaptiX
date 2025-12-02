@@ -13,7 +13,6 @@ This module handles all screen capture operations including:
 import os
 import ctypes
 import ctypes.util
-import threading
 from typing import Tuple, Optional, List
 from datetime import datetime
 from pathlib import Path
@@ -1083,13 +1082,9 @@ class ScreenCapture:
         directory: str = None,
         filename: str = None,
         capture_type: str = "full",
-    ) -> Tuple[str, int, str]:
+    ) -> Tuple[str, int]:
         """
         Save screenshot to file with timestamp naming.
-
-        Uses two-stage save strategy:
-        1. Quick save to cache (for instant clipboard access)
-        2. Optimized save to screenshots folder (in background)
 
         Args:
             image: PIL Image to save
@@ -1098,121 +1093,39 @@ class ScreenCapture:
             capture_type: Type of capture for suffix ('win', 'full', 'area')
 
         Returns:
-            Tuple of (final_filepath, file_size_bytes, cache_filepath)
-            - final_filepath: Where the optimized file will be saved (for display/notification)
-            - file_size_bytes: Size of the unoptimized cache file
-            - cache_filepath: Path to cache file (for clipboard - stable reference)
+            Tuple of (filepath, file_size_bytes)
         """
-        # TWO-STAGE SAVE STRATEGY:
-        # Stage 1: Quick save to cache for instant clipboard access
+        # Set up directory
+        if directory is None:
+            directory = CaptiXPaths.get_screenshots_dir()
 
-        # Get cache path (always same filename)
-        cache_filepath = CaptiXPaths.get_cache_screenshot_path()
-        cache_dir = CaptiXPaths.get_cache_dir()
+        # Create directory if it doesn't exist
+        Path(directory).mkdir(parents=True, exist_ok=True)
 
-        # Create cache directory if it doesn't exist
-        Path(cache_dir).mkdir(parents=True, exist_ok=True)
+        # Generate filename if not provided
+        if filename is None:
+            filename = CaptiXPaths.generate_screenshot_filename(capture_type)
 
-        # Remove old cached file if it exists (cleanup from previous screenshot)
-        if os.path.exists(cache_filepath):
-            try:
-                os.remove(cache_filepath)
-                logger.debug(f"Removed old cached screenshot: {cache_filepath}")
-            except OSError as e:
-                logger.warning(f"Failed to remove old cache file: {e}")
+        # Ensure .png extension
+        if not filename.lower().endswith('.png'):
+            filename += '.png'
+
+        filepath = os.path.join(directory, filename)
 
         try:
-            # Save unoptimized to cache (instant save)
-            image.save(cache_filepath, "PNG", optimize=False)
+            # Save to final destination
+            image.save(filepath, "PNG")
 
-            # Get cache file size
-            file_size = os.path.getsize(cache_filepath)
+            # Get file size
+            file_size = os.path.getsize(filepath)
 
-            logger.info(f"Screenshot cached (quick): {cache_filepath} ({file_size} bytes)")
+            logger.info(f"Screenshot saved: {filepath} ({file_size} bytes)")
 
-            # Stage 2: Set up final directory and filename for optimized save
-            if directory is None:
-                directory = CaptiXPaths.get_screenshots_dir()
-
-            # Create final directory if it doesn't exist
-            Path(directory).mkdir(parents=True, exist_ok=True)
-
-            # Generate final filename if not provided
-            if filename is None:
-                filename = CaptiXPaths.generate_screenshot_filename(capture_type)
-
-            # Ensure .png extension
-            if not filename.lower().endswith('.png'):
-                filename += '.png'
-
-            final_filepath = os.path.join(directory, filename)
-
-            # Launch background thread to save optimized version to final location
-            # Use daemon thread so it doesn't block app exit
-            optimization_thread = threading.Thread(
-                target=self._save_optimized_background,
-                args=(cache_filepath, final_filepath, file_size),
-                daemon=True,
-                name=f"SaveOptimized-{os.path.basename(final_filepath)}"
-            )
-            optimization_thread.start()
-            logger.debug(f"Background optimization started: {cache_filepath} -> {final_filepath}")
-
-            # Return both paths: final for display, cache for clipboard
-            return final_filepath, file_size, cache_filepath
+            return filepath, file_size
 
         except (OSError, IOError, PermissionError) as e:
-            logger.error(f"Failed to save screenshot to cache {cache_filepath}: {e}")
+            logger.error(f"Failed to save screenshot to {filepath}: {e}")
             raise
-
-    def _save_optimized_background(self, cache_filepath: str, final_filepath: str, original_size: int):
-        """
-        Save optimized screenshot from cache to final destination in background.
-
-        This method runs in a background thread to read from the cache file,
-        optimize it, and save to the final screenshots directory.
-
-        Args:
-            cache_filepath: Path to the cached (unoptimized) screenshot
-            final_filepath: Path where optimized screenshot should be saved
-            original_size: File size of unoptimized cache file (for logging)
-        """
-        try:
-            # Verify cache file still exists
-            if not os.path.exists(cache_filepath):
-                logger.debug(f"Skipping optimization - cache file no longer exists: {cache_filepath}")
-                return
-
-            # Open the cached image
-            logger.debug(f"Starting optimization: {cache_filepath} -> {final_filepath}")
-            image = Image.open(cache_filepath)
-
-            # Save optimized version to final destination
-            image.save(final_filepath, "PNG", optimize=True)
-
-            # Get optimized file size
-            optimized_size = os.path.getsize(final_filepath)
-
-            # Calculate space saved
-            space_saved = original_size - optimized_size
-            percent_saved = (space_saved / original_size * 100) if original_size > 0 else 0
-
-            logger.info(
-                f"Screenshot saved (optimized): {final_filepath} "
-                f"({original_size} -> {optimized_size} bytes, "
-                f"saved {space_saved} bytes / {percent_saved:.1f}%)"
-            )
-
-        except FileNotFoundError:
-            logger.debug(f"Optimization skipped - cache file deleted: {cache_filepath}")
-        except PermissionError as e:
-            logger.warning(f"Optimization failed - permission denied for {final_filepath}: {e}")
-        except OSError as e:
-            # Catch disk full, I/O errors, etc.
-            logger.warning(f"Optimization failed - OS error for {final_filepath}: {e}")
-        except Exception as e:
-            # Catch any other unexpected errors (corrupted image, etc.)
-            logger.warning(f"Optimization failed: {cache_filepath} -> {final_filepath}: {e}")
 
     def cleanup(self):
         """Clean up X11 resources."""
@@ -1269,28 +1182,28 @@ def capture_screenshot(
             capture_type = "area"
         else:
             capture_type = "full"
-        final_path, file_size, cache_path = capture.save_screenshot(
+        filepath, file_size = capture.save_screenshot(
             image, save_path, capture_type=capture_type
         )
 
-        # Copy to clipboard if requested (use cache path - stable reference)
+        # Copy to clipboard if requested
         if copy_to_clipboard:
             try:
-                if copy_image_to_clipboard(cache_path):
+                if copy_image_to_clipboard(filepath):
                     logger.info("Screenshot copied to clipboard")
                 else:
                     logger.warning("Failed to copy screenshot to clipboard")
             except Exception as e:
                 logger.warning(f"Clipboard copy failed: {e}")
 
-        # Show notification if requested (use final path for display)
+        # Show notification if requested
         if show_notification:
             try:
-                notify_screenshot_saved(final_path, file_size)
+                notify_screenshot_saved(filepath, file_size)
             except Exception as e:
                 logger.warning(f"Failed to show notification: {e}")
 
-        return final_path, file_size
+        return filepath, file_size
 
     finally:
         capture.cleanup()
@@ -1328,28 +1241,28 @@ def capture_window_at_position(
             raise RuntimeError(f"Failed to capture window at position ({x}, {y})")
 
         # Save the screenshot
-        final_path, file_size, cache_path = capture.save_screenshot(
+        filepath, file_size = capture.save_screenshot(
             image, save_path, capture_type="win"
         )
 
-        # Copy to clipboard if requested (use cache path - stable reference)
+        # Copy to clipboard if requested
         if copy_to_clipboard:
             try:
-                if copy_image_to_clipboard(cache_path):
+                if copy_image_to_clipboard(filepath):
                     logger.info("Screenshot copied to clipboard")
                 else:
                     logger.warning("Failed to copy screenshot to clipboard")
             except Exception as e:
                 logger.warning(f"Clipboard copy failed: {e}")
 
-        # Show notification if requested (use final path for display)
+        # Show notification if requested
         if show_notification:
             try:
-                notify_screenshot_saved(final_path, file_size)
+                notify_screenshot_saved(filepath, file_size)
             except Exception as e:
                 logger.warning(f"Failed to show notification: {e}")
 
-        return final_path, file_size
+        return filepath, file_size
 
     finally:
         capture.cleanup()
@@ -1424,28 +1337,28 @@ def capture_window_at_position_pure(
             )
 
         # Save the screenshot
-        final_path, file_size, cache_path = capture.save_screenshot(
+        filepath, file_size = capture.save_screenshot(
             image, save_path, capture_type="win"
         )
 
-        # Copy to clipboard if requested (use cache path - stable reference)
+        # Copy to clipboard if requested
         if copy_to_clipboard:
             try:
-                if copy_image_to_clipboard(cache_path):
+                if copy_image_to_clipboard(filepath):
                     logger.info("Screenshot copied to clipboard")
                 else:
                     logger.warning("Failed to copy screenshot to clipboard")
             except Exception as e:
                 logger.warning(f"Clipboard copy failed: {e}")
 
-        # Show notification if requested (use final path for display)
+        # Show notification if requested
         if show_notification:
             try:
-                notify_screenshot_saved(final_path, file_size)
+                notify_screenshot_saved(filepath, file_size)
             except Exception as e:
                 logger.warning(f"Failed to show notification: {e}")
 
-        return final_path, file_size
+        return filepath, file_size
 
     finally:
         capture.cleanup()

@@ -863,11 +863,11 @@ class ScreenshotOverlay(QWidget):
                         # Screenshot mode: capture and save
                         # Use pre-captured window content and existing save infrastructure
                         try:
-                            final_path, file_size, cache_path = self.capture_system.save_screenshot(
+                            filepath, file_size = self.capture_system.save_screenshot(
                                 captured_window.image, capture_type="win"
                             )
-                            # Copy to clipboard using cache path (stable reference)
-                            if copy_image_to_clipboard(cache_path):
+                            # Copy to clipboard
+                            if copy_image_to_clipboard(filepath):
                                 logger.info(
                                     f"Window capture completed: {captured_window.window_info.title} ({file_size} bytes)"
                                 )
@@ -875,9 +875,9 @@ class ScreenshotOverlay(QWidget):
                                 logger.warning(
                                     "Failed to copy window capture to clipboard"
                                 )
-                            # Show notification with sound (use final path for display)
+                            # Show notification with sound
                             try:
-                                notify_screenshot_saved(final_path, file_size)
+                                notify_screenshot_saved(filepath, file_size)
                             except Exception as e:
                                 logger.warning(f"Failed to show notification: {e}")
                         except (OSError, IOError, PermissionError) as e:
@@ -922,17 +922,17 @@ class ScreenshotOverlay(QWidget):
             if self.frozen_full_image:
                 # Use pre-captured desktop content and existing save infrastructure
                 try:
-                    final_path, file_size, cache_path = self.capture_system.save_screenshot(
+                    filepath, file_size = self.capture_system.save_screenshot(
                         self.frozen_full_image, capture_type="full"
                     )
-                    # Copy to clipboard using cache path (stable reference)
-                    if copy_image_to_clipboard(cache_path):
+                    # Copy to clipboard
+                    if copy_image_to_clipboard(filepath):
                         logger.info(f"Full desktop capture completed ({file_size} bytes)")
                     else:
                         logger.warning("Failed to copy desktop capture to clipboard")
-                    # Show notification with sound (use final path for display)
+                    # Show notification with sound
                     try:
-                        notify_screenshot_saved(final_path, file_size)
+                        notify_screenshot_saved(filepath, file_size)
                     except Exception as e:
                         logger.warning(f"Failed to show notification: {e}")
                 except (OSError, IOError, PermissionError) as e:
@@ -985,19 +985,19 @@ class ScreenshotOverlay(QWidget):
                             (left, top, right + 1, bottom + 1)
                         )
                         # Use existing save infrastructure
-                        final_path, file_size, cache_path = self.capture_system.save_screenshot(
+                        filepath, file_size = self.capture_system.save_screenshot(
                             cropped_image, capture_type="area"
                         )
-                        # Copy to clipboard using cache path (stable reference)
-                        if copy_image_to_clipboard(cache_path):
+                        # Copy to clipboard
+                        if copy_image_to_clipboard(filepath):
                             logger.info(
                                 f"Area capture completed: {width}x{height} pixels ({file_size} bytes)"
                             )
                         else:
                             logger.warning("Failed to copy area capture to clipboard")
-                        # Show notification with sound (use final path for display)
+                        # Show notification with sound
                         try:
-                            notify_screenshot_saved(final_path, file_size)
+                            notify_screenshot_saved(filepath, file_size)
                         except Exception as e:
                             logger.warning(f"Failed to show notification: {e}")
                     except (OSError, IOError, PermissionError) as e:

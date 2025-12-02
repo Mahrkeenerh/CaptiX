@@ -20,7 +20,6 @@ class CaptiXPaths:
     # Default directories (will be expanded with os.path.expanduser)
     DEFAULT_SCREENSHOTS_DIR = "~/Pictures/Screenshots"
     DEFAULT_VIDEOS_DIR = "~/Videos/Recordings"
-    DEFAULT_CACHE_DIR = "~/.cache/captix"
 
     # File naming configuration
     SCREENSHOT_PREFIX = "sc"
@@ -46,15 +45,6 @@ class CaptiXPaths:
         return os.path.expanduser(CaptiXPaths.DEFAULT_VIDEOS_DIR)
 
     @staticmethod
-    def get_cache_dir() -> str:
-        """Get the default cache directory (expanded).
-
-        Returns:
-            str: Absolute path to cache directory with ~ expanded.
-        """
-        return os.path.expanduser(CaptiXPaths.DEFAULT_CACHE_DIR)
-
-    @staticmethod
     def ensure_directories() -> Tuple[str, str]:
         """Ensure default directories exist and return their paths.
 
@@ -65,11 +55,9 @@ class CaptiXPaths:
         """
         screenshots_dir = CaptiXPaths.get_screenshots_dir()
         videos_dir = CaptiXPaths.get_videos_dir()
-        cache_dir = CaptiXPaths.get_cache_dir()
 
         Path(screenshots_dir).mkdir(parents=True, exist_ok=True)
         Path(videos_dir).mkdir(parents=True, exist_ok=True)
-        Path(cache_dir).mkdir(parents=True, exist_ok=True)
 
         return screenshots_dir, videos_dir
 
@@ -105,17 +93,3 @@ class CaptiXPaths:
         directory = custom_dir if custom_dir else CaptiXPaths.get_screenshots_dir()
         filename = CaptiXPaths.generate_screenshot_filename(capture_type)
         return os.path.join(directory, filename)
-
-    @staticmethod
-    def get_cache_screenshot_path() -> str:
-        """Get the path for the cached screenshot file.
-
-        This is a single static file that gets overwritten with each new screenshot.
-        It's used for quick saves and clipboard operations, while the optimized
-        version is saved to the screenshots directory.
-
-        Returns:
-            str: Full absolute path to the cached screenshot file.
-        """
-        cache_dir = CaptiXPaths.get_cache_dir()
-        return os.path.join(cache_dir, f"{CaptiXPaths.SCREENSHOT_PREFIX}_current{CaptiXPaths.SCREENSHOT_EXTENSION}")
