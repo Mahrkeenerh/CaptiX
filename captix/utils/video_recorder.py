@@ -45,6 +45,47 @@ class FFmpegRecorder:
         self.state = RecordingState.IDLE
         self.audio_system = AudioSystem()
         self.capture = ScreenCapture()
+        self._hw_encoder = self._detect_hw_encoder()
+
+    def _detect_hw_encoder(self) -> Optional[str]:
+        """Detect available hardware encoder.
+
+        Returns:
+            Encoder name ('h264_nvenc', 'h264_vaapi', 'h264_qsv') or None for software
+        """
+        # Check for NVENC (NVIDIA)
+        try:
+            result = subprocess.run(
+                ['ffmpeg', '-hide_banner', '-encoders'],
+                capture_output=True, text=True, timeout=5
+            )
+            if 'h264_nvenc' in result.stdout:
+                # Verify NVENC actually works (need 256x256 minimum for NVENC)
+                test = subprocess.run(
+                    ['ffmpeg', '-hide_banner', '-f', 'lavfi', '-i', 'color=c=black:s=256x256:d=0.1',
+                     '-c:v', 'h264_nvenc', '-f', 'null', '-'],
+                    capture_output=True, timeout=5
+                )
+                if test.returncode == 0:
+                    logger.info("Using NVIDIA NVENC hardware encoder")
+                    return 'h264_nvenc'
+        except Exception as e:
+            logger.debug(f"NVENC check failed: {e}")
+
+        # Check for VAAPI (Intel/AMD)
+        try:
+            result = subprocess.run(
+                ['ffmpeg', '-hide_banner', '-encoders'],
+                capture_output=True, text=True, timeout=5
+            )
+            if 'h264_vaapi' in result.stdout:
+                logger.info("Using VAAPI hardware encoder")
+                return 'h264_vaapi'
+        except Exception:
+            pass
+
+        logger.info("Using software encoder (libx264)")
+        return None
 
     def start_fullscreen(self, output_file: str, fps: int = 30, include_mic: bool = False) -> bool:
         """Start recording full screen.
@@ -92,9 +133,30 @@ class FFmpegRecorder:
             logger.error(f"Invalid recording area: {width}x{height}")
             return False
 
+        # Clip to screen bounds (FFmpeg fails if capture area extends beyond screen)
+        screen_geom = self.capture.get_screen_geometry()
+        screen_width, screen_height = screen_geom[2], screen_geom[3]
+
+        # Ensure x, y are within screen
+        x = max(0, min(x, screen_width - 1))
+        y = max(0, min(y, screen_height - 1))
+
+        # Clip width/height to not exceed screen boundaries
+        if x + width > screen_width:
+            width = screen_width - x
+            logger.debug(f"Clipped width to {width} to fit screen")
+        if y + height > screen_height:
+            height = screen_height - y
+            logger.debug(f"Clipped height to {height} to fit screen")
+
         # Ensure even dimensions (required by most codecs)
         width = width - (width % 2)
         height = height - (height % 2)
+
+        # Final validation after clipping
+        if width <= 0 or height <= 0:
+            logger.error(f"Recording area too small after clipping: {width}x{height}")
+            return False
 
         # Build FFmpeg command
         cmd = self._build_ffmpeg_command(x, y, width, height, output_file, fps, include_mic)
@@ -103,9 +165,9 @@ class FFmpegRecorder:
             # Start FFmpeg process
             self.process = subprocess.Popen(
                 cmd,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
             )
 
             self.output_file = output_file
@@ -184,11 +246,11 @@ class FFmpegRecorder:
         self.state = RecordingState.STOPPING
 
         try:
-            # Send 'q' to FFmpeg for graceful shutdown
-            if self.process and self.process.stdin:
-                self.process.stdin.write(b'q')
-                self.process.stdin.flush()
-                self.process.stdin.close()
+            # Send SIGINT for graceful shutdown (same as Ctrl+C)
+            # This makes FFmpeg finalize the file properly
+            if self.process:
+                import signal
+                self.process.send_signal(signal.SIGINT)
 
             # Wait for FFmpeg to finish
             self.process.wait(timeout=timeout)
@@ -280,14 +342,12 @@ class FFmpegRecorder:
         Returns:
             FFmpeg command as list
         """
+        # Video input
         cmd = [
-            'ffmpeg',
-            '-y',  # Overwrite output file
-
-            # Video input (x11grab)
-            '-f', 'x11grab',
-            '-framerate', str(fps),
+            'ffmpeg', '-y',
             '-video_size', f'{width}x{height}',
+            '-framerate', str(fps),
+            '-f', 'x11grab',
             '-i', f':0.0+{x},{y}',
         ]
 
@@ -296,18 +356,15 @@ class FFmpegRecorder:
         cmd.extend(audio_args)
 
         # Video encoding
-        cmd.extend([
-            '-c:v', 'libx264',
-            '-preset', 'ultrafast',
-            '-crf', '23',
-            '-pix_fmt', 'yuv420p',
-        ])
+        if self._hw_encoder == 'h264_nvenc':
+            cmd.extend(['-c:v', 'h264_nvenc'])
+        elif self._hw_encoder == 'h264_vaapi':
+            cmd.extend(['-vaapi_device', '/dev/dri/renderD128', '-c:v', 'h264_vaapi'])
+        else:
+            cmd.extend(['-c:v', 'libx264', '-preset', 'ultrafast'])
 
-        # Output container
-        cmd.extend([
-            '-f', 'matroska',  # MKV container
-            output_file
-        ])
+        # Output
+        cmd.append(output_file)
 
         logger.debug(f"FFmpeg command: {' '.join(cmd)}")
         return cmd
@@ -382,9 +439,9 @@ class XCompositeRecorder(FFmpegRecorder):
             # Start FFmpeg with stdin for raw frames
             self.process = subprocess.Popen(
                 cmd,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
             )
 
             self.window_id = window_id
