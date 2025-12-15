@@ -269,7 +269,7 @@ loop.run()
 
         # Play sound effect
         if play_sound:
-            self._play_sound("complete")
+            self._play_sound("camera-shutter")
 
         # Format the file size
         size_str = self._format_file_size(file_size)
