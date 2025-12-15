@@ -33,8 +33,16 @@ class RecordingAreaBorder(QWidget):
         """
         super().__init__()
 
-        # Position and size
-        self.setGeometry(x, y, width, height)
+        # Border thickness + padding to keep it outside recording area
+        border_offset = 5
+
+        # Position and size - OUTSIDE the recording area
+        self.setGeometry(
+            x - border_offset,
+            y - border_offset,
+            width + (border_offset * 2),
+            height + (border_offset * 2)
+        )
 
         # Window flags for transparent overlay
         self.setWindowFlags(
@@ -54,14 +62,12 @@ class RecordingAreaBorder(QWidget):
     def paintEvent(self, event):
         """Draw red border around recording area."""
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        # Red semi-transparent border (3px thick)
-        pen = QPen(QColor(255, 0, 0, 200), 3, Qt.PenStyle.SolidLine)
+        pen = QPen(QColor(255, 0, 0, 200), 3, Qt.PenStyle.DashDotLine)
         painter.setPen(pen)
         painter.setBrush(Qt.BrushStyle.NoBrush)
 
-        # Draw rectangle border (inset slightly to ensure visibility)
+        # Inset to keep border outside recording area (offset=5, pen=3, so inset by 2)
         rect = self.rect().adjusted(2, 2, -2, -2)
         painter.drawRect(rect)
 
@@ -93,10 +99,8 @@ class RecordingControlPanel(QWidget):
 
         # Window configuration
         self.setWindowTitle("CaptiX Recording")
-        self.setWindowFlags(
-            Qt.WindowType.WindowStaysOnTopHint |
-            Qt.WindowType.Tool
-        )
+        # Don't use Tool flag - it prevents the window from keeping the app alive
+        self.setWindowFlags(Qt.WindowType.WindowStaysOnTopHint)
 
         # Setup UI
         self._setup_ui()
