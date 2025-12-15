@@ -42,7 +42,7 @@ class AudioSystem:
                 if 'pipewire' in output:
                     logger.info("Detected PipeWire audio backend")
                     return 'pulse'  # PipeWire uses PulseAudio protocol
-                elif 'pulseaudio' in output:
+                elif 'pulseaudio' in output or 'libpulse' in output:
                     logger.info("Detected PulseAudio backend")
                     return 'pulse'
 
@@ -132,25 +132,16 @@ class AudioSystem:
         if include_microphone and self.microphone:
             # System audio + microphone with mixing
             args.extend([
-                '-f', 'pulse', '-i', 'default',  # System audio
-                '-f', 'pulse', '-i', self.microphone,  # Microphone
+                '-f', 'alsa', '-i', 'default',
+                '-f', 'alsa', '-i', self.microphone,
                 '-filter_complex', '[1:a][2:a]amix=inputs=2:duration=first[a]',
-                '-map', '0:v',  # Map video from input 0 (x11grab)
-                '-map', '[a]',  # Use mixed audio
+                '-map', '0:v', '-map', '[a]',
             ])
-            logger.info("Recording with system audio + microphone")
         else:
-            # System audio only
-            args.extend([
-                '-f', 'pulse', '-i', 'default',
-            ])
-            logger.info("Recording with system audio only")
+            # System audio only (ALSA for PipeWire compatibility)
+            args.extend(['-f', 'alsa', '-i', 'default'])
 
-        # Audio encoding settings
-        args.extend([
-            '-c:a', 'aac',
-            '-b:a', '128k',
-        ])
+        args.extend(['-c:a', 'aac'])
 
         return args
 
