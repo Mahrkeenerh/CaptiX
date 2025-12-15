@@ -16,28 +16,31 @@ This entire application was vibe-coded with Claude. I take no responsibility for
 - ⚡ **Global hotkeys** - Trigger captures from anywhere (configurable)
 - 🎨 **Enhanced cursor capture** - Native XFixes integration for true cursor appearance
 - 🔍 **Crosshair guidelines** - Precision targeting with dash-dot alignment guides
-- 🎬 **Screen recording** - Full screen, window, or area recording (planned)
+- 🎬 **Screen recording** - Full screen, window, or area recording with audio
 
 ## Current Status
 
-**Phase 8 Complete** - Fully functional screenshot tool with notifications and sound feedback
+**Phase 8 Complete** - Fully functional screenshot and screen recording tool with notifications
 
 ✅ Working Features:
-- **Global hotkey (Ctrl+Shift+X)** - Trigger screenshots from anywhere via GNOME shortcuts
+- **Screenshot mode (Ctrl+Shift+X)** - Trigger screenshots from anywhere via GNOME shortcuts
+- **Video recording mode (Super+Shift+X)** - Record screen with audio via GNOME shortcuts
 - Full screen capture via CLI or interactive overlay
 - Window-specific capture with pure content extraction (no overlaps)
+- Window tracking for video recording (follows window movement)
 - Precise area selection with drag interface
 - Pixel-perfect magnifier with coordinates and dimensions
 - Real-time window highlighting and content preview
 - Clipboard integration with xclip
-- Native cursor capture using XFixes extension
+- Native cursor capture using XFixes extension (screenshots and videos)
 - Workspace filtering and concurrent window capture
+- Audio capture (PulseAudio/PipeWire) with system audio and microphone support
+- Recording control panel with timer, file size, and system tray integration
 - Automatic installation with keyboard shortcut registration
 - Desktop notifications with sound and clickable folder opening
 
 🚧 Planned Features:
-- Phase 6: Video recording with FFmpeg
-- Phase 7: Recording control panel and daemon (for video recording state)
+- Phase 9: Documentation and distribution (PyInstaller packaging)
 
 ## System Requirements
 
@@ -59,7 +62,7 @@ echo "Display Server: $XDG_SESSION_TYPE" && python3 --version
 First, install the required system packages:
 
 ```bash
-sudo apt install python3 python3-pip python3-venv python3-xlib xclip
+sudo apt install python3 python3-pip python3-venv python3-xlib xclip ffmpeg
 ```
 
 ### Quick Install
@@ -81,11 +84,15 @@ The installer will:
 
 ## Usage
 
-### Global Hotkey (Recommended)
+### Global Hotkeys (Recommended)
 
+**Screenshot mode:**
 Press **Ctrl+Shift+X** from anywhere to launch the screenshot overlay.
 
-The hotkey is automatically registered during installation and works system-wide.
+**Video recording mode:**
+Press **Super+Shift+X** from anywhere to launch the video recording overlay.
+
+Both hotkeys are automatically registered during installation and work system-wide.
 
 ### Command Line Interface
 
@@ -103,6 +110,11 @@ captix --screenshot --no-clipboard           # Skip clipboard copy
 captix --ui
 ```
 
+**Record a video:**
+```bash
+captix --video                                # Interactive video recording mode
+```
+
 **Window detection:**
 ```bash
 captix --list-windows                        # List all visible windows
@@ -116,12 +128,12 @@ captix --info                                # Display screen geometry and syste
 
 ### Interactive UI Controls
 
-When the overlay appears:
+When the overlay appears (screenshot or video mode):
 
-1. **Single click on window** - Captures that window immediately
-2. **Single click on desktop** - Captures full screen immediately
-3. **Click and drag** - Creates selection rectangle, captures on release
-4. **Right-click** - Toggle window content preview mode
+1. **Single click on window** - Captures/records that window
+2. **Single click on desktop** - Captures/records full screen
+3. **Click and drag** - Creates selection rectangle for custom area
+4. **Right-click** - Toggle window content preview mode (screenshot mode only)
 5. **Escape** - Cancel and close overlay
 
 **While dragging:**
@@ -129,6 +141,14 @@ When the overlay appears:
 - Real-time cursor coordinates (X, Y) displayed
 - Selection dimensions (Width × Height) shown in bottom-right corner
 - Crosshair guidelines for precise alignment
+
+**Video recording controls:**
+- After selecting area, recording control panel appears
+- **Stop button** - Save recording and show notification
+- **Abort button** - Cancel recording and delete file
+- **System tray icon** - Monitor recording from tray
+- Timer shows elapsed time
+- File size estimates shown in real-time
 
 ### Emergency Exit Failsafes
 
@@ -160,10 +180,11 @@ Screenshots are automatically saved to:
 ~/Pictures/Screenshots/Screenshot_YYYY-MM-DD_HH-MM-SS.png
 ```
 
-Videos will be saved to (when implemented):
+Videos are saved to:
 ```
-~/Videos/Recordings/Recording_YYYY-MM-DD_HH-MM-SS.mp4
+~/Videos/Recordings/rec_YYYY-MM-DD_HHMMSS_<type>.mkv
 ```
+Where `<type>` is `full`, `win`, or `area`.
 
 ## Technical Features
 
@@ -202,10 +223,8 @@ Configuration files will be stored in `~/.config/captix/`:
 ```
 
 **Current hotkeys:**
-- `Ctrl+Shift+X` - Screenshot mode (active now!)
-
-**Planned hotkeys:**
-- `Super+Shift+X` - Video recording mode (Phase 6)
+- `Ctrl+Shift+X` - Screenshot mode
+- `Super+Shift+X` - Video recording mode
 
 ## Development Status
 
@@ -246,18 +265,20 @@ Configuration files will be stored in `~/.config/captix/`:
 - Automatic registration during installation
 - No daemon required for screenshot functionality
 
-#### Phase 6: FFmpeg Integration & Video Recording
+#### Phase 6: FFmpeg Integration & Video Recording ✅
 - FFmpeg wrapper for screen recording
 - Audio capture (PulseAudio/PipeWire)
 - Cursor capture in videos
 - Same selection interface as screenshots
+- XComposite window tracking
 
-#### Phase 7: Recording Control Panel & Daemon
+#### Phase 7: Recording Control Panel & Daemon ✅
 - Floating control window
 - Timer and file size monitoring
 - Stop/Abort buttons
 - Static recording area indicator
-- Background daemon for recording state management (only needed for video)
+- System tray integration
+- No daemon required (uses GNOME hotkey system)
 
 #### Phase 8: Notifications & Polish
 - Desktop notifications with file sizes
@@ -312,10 +333,8 @@ ls -ld ~/Pictures/Screenshots
 ## Known Limitations
 
 - **X11 only** - Does not support Wayland (fundamental X11 dependency)
-- **No video recording yet** - Phases 6-7 in development
-- **No global hotkeys yet** - Phase 5 in development, currently CLI-only
-- **No notifications yet** - Phase 8 planned
 - **Single display optimization** - Multi-monitor works but not fully optimized
+- **Audio system required** - Video recording requires PulseAudio or PipeWire
 
 ## Dependencies
 
@@ -329,7 +348,9 @@ dbus-python            # D-Bus integration for single-instance control
 
 **System Requirements:**
 - `xclip` - Clipboard operations
+- `ffmpeg` - Video recording and encoding
 - `dbus` - Session bus for single-instance management (standard on GNOME)
+- PulseAudio or PipeWire - Audio capture for video recording
 - X11 with XComposite, XFixes, and RandR extensions
 - Python 3.10 or higher
 
@@ -344,10 +365,10 @@ dbus-python            # D-Bus integration for single-instance control
 - `utils/magnifier.py` - Pixel-perfect magnifier widget
 - `scripts/register_shortcut.sh` - GNOME keyboard shortcut registration
 
-**Future Components:**
-- `video_recorder.py` - FFmpeg video recording (Phase 6)
-- `recording_panel.py` - Recording control UI (Phase 7)
-- `daemon.py` - Background daemon for video recording state (Phase 7, optional)
+**Video Components:**
+- `utils/video_recorder.py` - FFmpeg video recording (Phase 6) ✅
+- `utils/recording_panel.py` - Recording control UI (Phase 7) ✅
+- `utils/audio_detect.py` - Audio system detection ✅
 
 ## Performance
 
