@@ -140,6 +140,7 @@ class ScreenshotOverlay(QWidget):
         """
         super().__init__()
         self.video_mode = video_mode
+        self.pending_recording_params = None  # Store recording params to emit after close
         self.frozen_screen: Optional[QPixmap] = None
         self.capture_system: Optional[ScreenCapture] = None
         self.window_detector: Optional[WindowDetector] = None
@@ -838,15 +839,18 @@ class ScreenshotOverlay(QWidget):
                 # Window was clicked
                 target_window_id = self.highlighted_window.window_id
 
-                # In video mode, use highlighted_window directly (captured_windows is empty)
+                # In video mode, use content geometry (excludes window borders)
                 if self.video_mode:
                     window_info = self.highlighted_window
-                    logger.info(f"Video mode: Selected window '{window_info.title}' for recording (tracking enabled)")
-                    self.recording_area_selected.emit(
-                        window_info.x,
-                        window_info.y,
-                        window_info.width,
-                        window_info.height,
+                    content_rect = self._get_window_content_geometry(window_info)
+                    logger.info(f"Video mode: Selected window '{window_info.title}' for recording at {content_rect.x()},{content_rect.y()} {content_rect.width()}x{content_rect.height()}")
+
+                    # Store parameters to emit after overlay closes naturally
+                    self.pending_recording_params = (
+                        content_rect.x(),
+                        content_rect.y(),
+                        content_rect.width(),
+                        content_rect.height(),
                         False,  # not fullscreen
                         target_window_id,  # window ID for tracking
                         True  # track window movement
@@ -907,15 +911,18 @@ class ScreenshotOverlay(QWidget):
     def _capture_desktop(self):
         """Helper method to capture desktop using frozen image."""
         if self.video_mode:
-            # Video mode: emit fullscreen recording signal
+            # Video mode: store params and close overlay
             logger.info("Video mode: Selected fullscreen for recording")
             geom = self.capture_system.get_screen_geometry()
-            self.recording_area_selected.emit(
+
+            # Store parameters to emit after overlay closes naturally
+            self.pending_recording_params = (
                 geom[0], geom[1], geom[2], geom[3],
                 True,  # is fullscreen
                 0,  # no window ID
                 False  # no tracking
             )
+            self.close()
         else:
             # Screenshot mode: capture desktop
             logger.info("Desktop click detected - capturing full screen")
@@ -966,14 +973,17 @@ class ScreenshotOverlay(QWidget):
             )
 
             if self.video_mode:
-                # Video mode: emit recording area signal
+                # Video mode: store params and close overlay
                 logger.info(f"Video mode: Selected custom area {width}x{height} for recording")
-                self.recording_area_selected.emit(
+
+                # Store parameters to emit after overlay closes naturally
+                self.pending_recording_params = (
                     left, top, width, height,
                     False,  # not fullscreen
                     0,  # no window ID
                     False  # no tracking
                 )
+                self.close()
             else:
                 # Screenshot mode: capture and save
                 # Use pre-captured desktop content for cropping
@@ -1522,10 +1532,22 @@ class ScreenshotOverlay(QWidget):
         # Clear highlighting state
         self.highlighted_window = None
 
+        # In video mode, emit pending recording signal AFTER event loop processes the close
+        if self.video_mode and self.pending_recording_params:
+            logger.info("Overlay closed, scheduling recording signal")
+
+            # Use QTimer.singleShot with 0ms to defer emission to next event loop iteration
+            # This ensures closeEvent completes and X11 redraws before FFmpeg starts
+            params = self.pending_recording_params
+            self.pending_recording_params = None
+            QTimer.singleShot(0, lambda: self.recording_area_selected.emit(*params))
+
         # Ensure application exits when window is closed
-        app = QApplication.instance()
-        if app:
-            app.quit()
+        # BUT only in screenshot mode - in video mode, keep app running for control panel
+        if not self.video_mode:
+            app = QApplication.instance()
+            if app:
+                app.quit()
         super().closeEvent(event)
 
 
