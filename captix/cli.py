@@ -103,21 +103,35 @@ def cmd_video_ui(args) -> int:
     import subprocess
     from PyQt6.QtWidgets import QApplication
     from captix.ui import ScreenshotOverlay
-    from captix.utils.video_recorder import FFmpegRecorder, XCompositeRecorder
+    from captix.utils.video_recorder import FFmpegRecorder
     from captix.utils.recording_panel import RecordingControlPanel, RecordingAreaBorder
     from captix.utils.notifications import notify_recording_saved
     from captix.utils.paths import CaptiXPaths
+    from captix.utils.recording_service import is_recording_active, stop_active_recording, VideoRecordingService
     from datetime import datetime
+
+    # Check if recording is already active
+    if is_recording_active():
+        print("Recording is active - stopping it...")
+        if stop_active_recording():
+            print("Stop command sent successfully")
+            return 0
+        else:
+            print("Failed to stop recording")
+            return 1
 
     print("Launching video recording selection UI...")
 
     app = QApplication(sys.argv)
 
+    # CRITICAL: Don't quit when overlay closes - we need to show the recording panel!
+    app.setQuitOnLastWindowClosed(False)
+
     # Create overlay in video mode
     overlay = ScreenshotOverlay(video_mode=True)
 
     # Storage for recorder and control panel
-    active_recorder = {'recorder': None, 'panel': None, 'border': None}
+    active_recorder = {'recorder': None, 'panel': None, 'border': None, 'service': None}
 
     def start_recording(x, y, width, height, is_fullscreen, window_id, track_window):
         """Start recording after area selection."""
@@ -135,27 +149,17 @@ def cmd_video_ui(args) -> int:
             timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
             output_file = str(Path(CaptiXPaths.get_videos_dir()) / f"rec_{timestamp}_{capture_type}.mkv")
 
-            # Determine recorder type
-            if track_window and window_id:
-                # Use XComposite for window tracking
-                print(f"Starting window tracking recording (window ID: {window_id})...")
-                recorder = XCompositeRecorder()
-                success = recorder.start_window_tracking(
-                    window_id,
-                    output_file,
-                    fps=30,
-                    include_mic=False
-                )
-            else:
-                # Use FFmpeg x11grab for static area
-                print(f"Starting area recording: {width}x{height} at ({x},{y})...")
-                recorder = FFmpegRecorder()
-                success = recorder.start_area(
-                    x, y, width, height,
-                    output_file,
-                    fps=30,
-                    include_mic=False
-                )
+            # Use FFmpeg x11grab for all recording types (static area)
+            # Note: XComposite window tracking is disabled because it conflicts with
+            # modern desktop compositors (BadAccess error on XCompositeRedirectWindow)
+            print(f"Starting area recording: {width}x{height} at ({x},{y})...")
+            recorder = FFmpegRecorder()
+            success = recorder.start_area(
+                x, y, width, height,
+                output_file,
+                fps=30,
+                include_mic=False
+            )
 
             if not success:
                 print("Failed to start recording")
@@ -186,9 +190,21 @@ def cmd_video_ui(args) -> int:
                 border = RecordingAreaBorder(x, y, width, height)
                 border.show()
 
-            # Connect stop/abort signals
+            # Define stop/abort handlers
             def on_stop():
                 print("Stopping recording...")
+
+                # Release D-Bus service
+                if active_recorder['service']:
+                    active_recorder['service'].release()
+
+                # Hide UI immediately (before waiting for recording to finish)
+                if border:
+                    border.close()
+                panel.close()
+                app.processEvents()  # Ensure UI updates immediately
+
+                # Now stop recording (this may take time to finalize the video)
                 final_path, file_size, duration = recorder.stop()
 
                 if final_path:
@@ -200,20 +216,21 @@ def cmd_video_ui(args) -> int:
                     seconds = int(duration % 60)
                     duration_str = f"{minutes}:{seconds:02d}"
 
-                    # Show notification
+                    # Show notification with sound (after recording is fully saved)
                     try:
                         notify_recording_saved(final_path, file_size, duration_str)
                     except Exception as e:
                         print(f"Warning: Failed to show notification: {e}")
 
-                # Cleanup
-                if border:
-                    border.close()
-                panel.close()
                 app.quit()
 
             def on_abort():
                 print("Aborting recording...")
+
+                # Release D-Bus service
+                if active_recorder['service']:
+                    active_recorder['service'].release()
+
                 recorder.abort()
 
                 # Cleanup
@@ -225,19 +242,16 @@ def cmd_video_ui(args) -> int:
             panel.stop_requested.connect(on_stop)
             panel.abort_requested.connect(on_abort)
 
-            panel.show()
-
-            # Notify user that recording started
+            # Register D-Bus service for remote control (after on_stop is defined)
             try:
-                subprocess.run([
-                    'notify-send',
-                    '-u', 'low',
-                    '-i', 'media-record',
-                    'CaptiX Recording',
-                    f'Recording started: {capture_type}'
-                ])
-            except:
-                pass
+                recording_service = VideoRecordingService(on_stop)
+                active_recorder['service'] = recording_service
+                print("Recording service registered - hotkey will now stop the recording")
+            except Exception as e:
+                print(f"Warning: Failed to register recording service: {e}")
+                print("Recording will work but hotkey won't stop it")
+
+            panel.show()
 
             # Store references
             active_recorder['recorder'] = recorder
