@@ -1536,11 +1536,17 @@ class ScreenshotOverlay(QWidget):
         if self.video_mode and self.pending_recording_params:
             logger.info("Overlay closed, scheduling recording signal")
 
+            # Hide immediately to ensure window is gone
+            self.hide()
+
             # Use QTimer.singleShot with 0ms to defer emission to next event loop iteration
             # This ensures closeEvent completes and X11 redraws before FFmpeg starts
             params = self.pending_recording_params
             self.pending_recording_params = None
             QTimer.singleShot(0, lambda: self.recording_area_selected.emit(*params))
+
+            # Schedule widget destruction
+            self.deleteLater()
 
         # Ensure application exits when window is closed
         # BUT only in screenshot mode - in video mode, keep app running for control panel

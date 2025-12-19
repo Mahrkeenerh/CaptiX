@@ -11,6 +11,8 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QPainter, QColor, QPen, QIcon, QPixmap
+from Xlib import display as xlib_display, X
+from Xlib.ext import shape
 import logging
 
 logger = logging.getLogger(__name__)
@@ -58,6 +60,25 @@ class RecordingAreaBorder(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
 
         logger.info(f"Created recording border: {width}x{height} at ({x},{y})")
+
+    def showEvent(self, event):
+        """Apply X11 input shape after window is shown."""
+        super().showEvent(event)
+        # Use X11 SHAPE extension to make window click-through
+        try:
+            d = xlib_display.Display()
+            win = d.create_resource_object('window', int(self.winId()))
+            win.shape_rectangles(
+                shape.SO.Set,
+                shape.SK.Input,
+                X.Unsorted,
+                0, 0,
+                []  # Empty = fully click-through
+            )
+            d.sync()
+            logger.info("Recording border: X11 input shape set to empty")
+        except Exception as e:
+            logger.warning(f"Failed to set X11 input shape on border: {e}")
 
     def paintEvent(self, event):
         """Draw red border around recording area."""

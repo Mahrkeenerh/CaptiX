@@ -130,8 +130,8 @@ def cmd_video_ui(args) -> int:
     # Create overlay in video mode
     overlay = ScreenshotOverlay(video_mode=True)
 
-    # Storage for recorder and control panel
-    active_recorder = {'recorder': None, 'panel': None, 'border': None, 'service': None}
+    # Storage for recorder and control panel (include overlay for cleanup)
+    active_recorder = {'recorder': None, 'panel': None, 'border': None, 'service': None, 'overlay': overlay}
 
     def start_recording(x, y, width, height, is_fullscreen, window_id, track_window):
         """Start recording after area selection."""
@@ -199,6 +199,11 @@ def cmd_video_ui(args) -> int:
                     active_recorder['service'].release()
 
                 # Hide UI immediately (before waiting for recording to finish)
+                try:
+                    if active_recorder['overlay']:
+                        active_recorder['overlay'].close()
+                except RuntimeError:
+                    pass  # Already deleted
                 if border:
                     border.close()
                 panel.close()
@@ -234,6 +239,11 @@ def cmd_video_ui(args) -> int:
                 recorder.abort()
 
                 # Cleanup
+                try:
+                    if active_recorder['overlay']:
+                        active_recorder['overlay'].close()
+                except RuntimeError:
+                    pass  # Already deleted
                 if border:
                     border.close()
                 panel.close()
