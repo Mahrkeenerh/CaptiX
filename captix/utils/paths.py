@@ -18,13 +18,14 @@ class CaptiXPaths:
     """
 
     # Default directories (will be expanded with os.path.expanduser)
-    DEFAULT_SCREENSHOTS_DIR = "~/Pictures/Screenshots"
-    DEFAULT_VIDEOS_DIR = "~/Videos/Recordings"
+    DEFAULT_SCREENSHOTS_DIR = "~/Gallery/Screenshots"
+    DEFAULT_VIDEOS_DIR = "~/Gallery/Recordings"
 
     # File naming configuration
     SCREENSHOT_PREFIX = "sc"
     SCREENSHOT_EXTENSION = ".png"
     TIMESTAMP_FORMAT = "%Y-%m-%d_%H%M%S"
+    MONTH_FOLDER_FORMAT = "%Y-%m"
 
     @staticmethod
     def get_screenshots_dir() -> str:
@@ -43,6 +44,37 @@ class CaptiXPaths:
             str: Absolute path to videos directory with ~ expanded.
         """
         return os.path.expanduser(CaptiXPaths.DEFAULT_VIDEOS_DIR)
+
+    @staticmethod
+    def get_current_month_folder() -> str:
+        """Get the current month folder name.
+
+        Returns:
+            str: Month folder name in format YYYY-MM (e.g., "2025-12").
+        """
+        return datetime.now().strftime(CaptiXPaths.MONTH_FOLDER_FORMAT)
+
+    @staticmethod
+    def get_screenshots_month_dir() -> str:
+        """Get the screenshots directory with current month subfolder.
+
+        Returns:
+            str: Absolute path to screenshots month directory.
+        """
+        base_dir = CaptiXPaths.get_screenshots_dir()
+        month_folder = CaptiXPaths.get_current_month_folder()
+        return os.path.join(base_dir, month_folder)
+
+    @staticmethod
+    def get_videos_month_dir() -> str:
+        """Get the videos directory with current month subfolder.
+
+        Returns:
+            str: Absolute path to videos month directory.
+        """
+        base_dir = CaptiXPaths.get_videos_dir()
+        month_folder = CaptiXPaths.get_current_month_folder()
+        return os.path.join(base_dir, month_folder)
 
     @staticmethod
     def ensure_directories() -> Tuple[str, str]:

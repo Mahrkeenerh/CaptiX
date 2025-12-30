@@ -145,9 +145,11 @@ def cmd_video_ui(args) -> int:
             else:
                 capture_type = "area"
 
-            # Generate output filename with type suffix
+            # Generate output filename with type suffix (use month-based subfolder)
+            videos_dir = Path(CaptiXPaths.get_videos_month_dir())
+            videos_dir.mkdir(parents=True, exist_ok=True)
             timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
-            output_file = str(Path(CaptiXPaths.get_videos_dir()) / f"rec_{timestamp}_{capture_type}.mkv")
+            output_file = str(videos_dir / f"rec_{timestamp}_{capture_type}.mkv")
 
             # Use FFmpeg x11grab for all recording types (static area)
             # Note: XComposite window tracking is disabled because it conflicts with

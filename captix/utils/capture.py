@@ -1095,9 +1095,9 @@ class ScreenCapture:
         Returns:
             Tuple of (filepath, file_size_bytes)
         """
-        # Set up directory
+        # Set up directory (use month-based subfolder)
         if directory is None:
-            directory = CaptiXPaths.get_screenshots_dir()
+            directory = CaptiXPaths.get_screenshots_month_dir()
 
         # Create directory if it doesn't exist
         Path(directory).mkdir(parents=True, exist_ok=True)
