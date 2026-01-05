@@ -39,8 +39,8 @@ captix --info
 ## Configuration
 
 - Config directory: `~/.config/captix/`
-- Screenshots saved to: `~/Pictures/Screenshots/` (organized in monthly subfolders)
-- Recordings saved to: `~/Videos/Recordings/` (organized in monthly subfolders)
+- Screenshots saved to: `~/Gallery/Screenshots/` (organized in monthly subfolders)
+- Recordings saved to: `~/Gallery/Recordings/` (organized in monthly subfolders)
 
 ## File Locations
 

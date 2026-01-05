@@ -88,8 +88,8 @@ echo ""
 echo "Creating directories..."
 mkdir -p "$BIN_DIR"
 mkdir -p "$AUTOSTART_DIR"
-mkdir -p "$HOME/Pictures/Screenshots"
-mkdir -p "$HOME/Videos/Recordings"
+mkdir -p "$HOME/Gallery/Screenshots"
+mkdir -p "$HOME/Gallery/Recordings"
 
 echo "✓ Directories created"
 

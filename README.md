@@ -35,7 +35,7 @@ cd CaptiX
 ./install.sh
 ```
 
-The installer sets up a virtual environment, installs dependencies, creates the `captix` launcher in `~/.local/bin/`, and registers the keyboard shortcuts.
+The installer sets up a virtual environment, installs dependencies, creates the `captix` launcher in `~/.local/bin/`, registers keyboard shortcuts, and adds CaptiX to your application menu.
 
 **Hotkeys work immediately after installation.**
 
@@ -77,9 +77,10 @@ During video recording:
 
 ### Output
 
+Files are organized into monthly subfolders:
 ```
-Screenshots: ~/Pictures/Screenshots/Screenshot_YYYY-MM-DD_HH-MM-SS.png
-Videos:      ~/Videos/Recordings/rec_YYYY-MM-DD_HHMMSS_<type>.mkv
+Screenshots: ~/Gallery/Screenshots/YYYY-MM/Screenshot_YYYY-MM-DD_HH-MM-SS.png
+Videos:      ~/Gallery/Recordings/YYYY-MM/rec_YYYY-MM-DD_HHMMSS_<type>.mkv
 ```
 
 ## Troubleshooting
