@@ -93,20 +93,22 @@ mkdir -p "$HOME/Videos/Recordings"
 
 echo "✓ Directories created"
 
-# Create wrapper scripts
+# Create launcher symlinks (symlinks only - no file copying)
 echo ""
-echo "Creating launcher scripts..."
+echo "Creating launcher symlinks..."
 
-# Main captix launcher
-cat > "$BIN_DIR/captix" << EOF
-#!/bin/bash
-source "$VENV_DIR/bin/activate"
-cd "$SCRIPT_DIR"
-exec python3 -m captix "\$@"
-EOF
-chmod +x "$BIN_DIR/captix"
+# Main captix launcher (symlink to captix-screenshot wrapper)
+ln -sf "$SCRIPT_DIR/captix-screenshot" "$BIN_DIR/captix"
 
-echo "✓ Launcher scripts created"
+echo "✓ Launcher symlinks created"
+
+# Symlink desktop entry (for GUI integration)
+echo ""
+echo "Installing desktop entry..."
+mkdir -p ~/.local/share/applications
+ln -sf "$SCRIPT_DIR/captix.desktop" ~/.local/share/applications/
+update-desktop-database ~/.local/share/applications 2>/dev/null || true
+echo "✓ Desktop entry installed"
 
 
 # Register GNOME keyboard shortcut

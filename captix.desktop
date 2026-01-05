@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=CaptiX
+GenericName=Screenshot Tool
+Comment=Screenshot and screen recording tool for Linux X11
+Exec=captix --ui
+Icon=camera-photo
+Terminal=false
+Categories=Graphics;Utility;
+Keywords=screenshot;screen;capture;record;video;
+StartupNotify=false
+StartupWMClass=captix

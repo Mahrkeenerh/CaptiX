@@ -3,8 +3,8 @@
 # This wrapper ensures the process shows as "captix-screenshot" in process lists
 # for better identification, while using the Python module structure internally.
 
-# Get the directory where this script is located
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Get the directory where this script is located (resolve symlinks)
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 
 # Activate virtual environment if it exists
 if [ -f "$SCRIPT_DIR/.venv/bin/activate" ]; then

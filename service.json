@@ -1,0 +1,21 @@
+{
+  "name": "CaptiX",
+  "version": "0.4.0",
+  "description": "Screenshot and screen recording tool for Linux X11",
+  "type": "application",
+  "systemd": null,
+  "network": {
+    "port": null,
+    "health": null
+  },
+  "paths": {
+    "config": "~/.config/captix/config.json",
+    "logs": null,
+    "install": "install.sh",
+    "uninstall": "uninstall.sh"
+  },
+  "ui": {
+    "icon": "camera-photo",
+    "category": "Media"
+  }
+}

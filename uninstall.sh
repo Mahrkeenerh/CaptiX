@@ -21,6 +21,13 @@ echo "Removing launcher scripts..."
 rm -f "$BIN_DIR/captix"
 echo "✓ Launcher scripts removed"
 
+# Remove desktop entry symlink
+echo ""
+echo "Removing desktop entry..."
+rm -f ~/.local/share/applications/captix.desktop
+update-desktop-database ~/.local/share/applications 2>/dev/null || true
+echo "✓ Desktop entry removed"
+
 # Remove GNOME keyboard shortcut
 echo ""
 echo "Removing GNOME keyboard shortcut..."
@@ -82,28 +89,6 @@ else
     echo "→ gsettings not found, skipping"
 fi
 
-# Ask about configuration
-echo ""
-read -p "Remove configuration directory ($CONFIG_DIR)? [y/N] " -n 1 -r
-echo
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-    rm -rf "$CONFIG_DIR"
-    echo "✓ Configuration removed"
-else
-    echo "→ Configuration kept at $CONFIG_DIR"
-fi
-
-# Ask about screenshots
-echo ""
-read -p "Remove screenshots directory (~/Pictures/Screenshots)? [y/N] " -n 1 -r
-echo
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-    rm -rf "$HOME/Pictures/Screenshots"
-    echo "✓ Screenshots directory removed"
-else
-    echo "→ Screenshots kept at ~/Pictures/Screenshots"
-fi
-
 echo ""
 echo "===================================="
 echo "Uninstallation Complete!"
@@ -111,6 +96,9 @@ echo "===================================="
 echo ""
 echo "CaptiX has been removed from your system."
 echo ""
-echo "Note: The project directory and virtual environment were not removed."
-echo "To completely remove CaptiX, delete the project directory manually."
+echo "Note: The following were preserved:"
+echo "  - Configuration: $CONFIG_DIR"
+echo "  - Screenshots: ~/Pictures/Screenshots"
+echo "  - Recordings: ~/Videos/Recordings"
+echo "  - Project directory and virtual environment"
 echo ""
