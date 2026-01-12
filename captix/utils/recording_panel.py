@@ -140,6 +140,9 @@ class RecordingControlPanel(QWidget):
         self.pulse_timer.timeout.connect(self._pulse_indicator)
         self.pulse_timer.start(500)  # Pulse every 500ms
 
+        # Error state
+        self._error_detected = False
+
         logger.info("Recording control panel initialized")
 
     def _setup_ui(self):
@@ -277,6 +280,13 @@ class RecordingControlPanel(QWidget):
 
     def _update_display(self):
         """Update timer and file size display."""
+        # Check for FFmpeg errors first
+        if not self._error_detected and hasattr(self.recorder, 'get_error'):
+            error = self.recorder.get_error()
+            if error:
+                self._show_error_state(error)
+                return
+
         # Update timer
         duration = self.recorder.get_duration()
         self.timer_label.setText(self._format_duration(duration))
@@ -292,12 +302,63 @@ class RecordingControlPanel(QWidget):
 
     def _pulse_indicator(self):
         """Pulse recording indicator."""
+        if self._error_detected:
+            return  # Don't pulse when in error state
+
         self.pulse_state = not self.pulse_state
 
         if self.pulse_state:
             self.indicator_label.setStyleSheet("color: red; font-size: 20px; font-weight: bold;")
         else:
             self.indicator_label.setStyleSheet("color: #ffcccc; font-size: 20px; font-weight: bold;")
+
+    def _show_error_state(self, error_message: str):
+        """Show error state in the UI when FFmpeg fails.
+
+        Args:
+            error_message: Error message from FFmpeg
+        """
+        self._error_detected = True
+        logger.error(f"Recording failed: {error_message}")
+
+        # Stop pulse animation
+        self.pulse_timer.stop()
+
+        # Update indicator to show error
+        self.indicator_label.setText("!")
+        self.indicator_label.setStyleSheet("color: #ff6600; font-size: 20px; font-weight: bold;")
+
+        # Update timer label to show error
+        self.timer_label.setText("ERROR")
+        self.timer_label.setStyleSheet("font-size: 14px; font-family: monospace; color: #ff6600;")
+
+        # Show error in area label
+        # Truncate long error messages
+        short_error = error_message[:80] + "..." if len(error_message) > 80 else error_message
+        self.area_label.setText(f"Recording failed: {short_error}")
+        self.area_label.setStyleSheet("font-size: 12px; color: #ff6600;")
+
+        # Update tray
+        self.tray_icon.setToolTip(f"CaptiX - Recording failed: {short_error}")
+
+        # Change stop button to "Close"
+        self.stop_button.setText("Close")
+        self.stop_button.setStyleSheet("""
+            QPushButton {
+                background-color: #666666;
+                color: white;
+                border: none;
+                padding: 8px 20px;
+                font-size: 13px;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #555555;
+            }
+        """)
+
+        # Hide abort button (nothing to abort)
+        self.abort_button.hide()
 
     def _format_duration(self, seconds: float) -> str:
         """Format duration as HH:MM:SS.

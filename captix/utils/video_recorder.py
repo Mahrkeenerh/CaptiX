@@ -46,6 +46,8 @@ class FFmpegRecorder:
         self.audio_system = AudioSystem()
         self.capture = ScreenCapture()
         self._hw_encoder = self._detect_hw_encoder()
+        self._stderr_output: str = ""
+        self._process_error: Optional[str] = None
 
     def _detect_hw_encoder(self) -> Optional[str]:
         """Detect available hardware encoder.
@@ -162,18 +164,27 @@ class FFmpegRecorder:
         cmd = self._build_ffmpeg_command(x, y, width, height, output_file, fps, include_mic)
 
         try:
-            # Start FFmpeg process
+            # Start FFmpeg process with stderr capture
             self.process = subprocess.Popen(
                 cmd,
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL
+                stderr=subprocess.PIPE
             )
 
             self.output_file = output_file
             self.recording_area = (x, y, width, height)
             self.start_time = time.time()
             self.state = RecordingState.RECORDING
+            self._stderr_output = ""
+            self._process_error = None
+
+            # Start stderr reader thread
+            self._stderr_thread = threading.Thread(
+                target=self._read_stderr,
+                daemon=True
+            )
+            self._stderr_thread.start()
 
             logger.info(f"Started recording: {width}x{height} at ({x},{y}) -> {output_file}")
             return True
@@ -369,6 +380,57 @@ class FFmpegRecorder:
         logger.debug(f"FFmpeg command: {' '.join(cmd)}")
         return cmd
 
+    def _read_stderr(self):
+        """Read FFmpeg stderr output in background thread."""
+        try:
+            if self.process and self.process.stderr:
+                for line in self.process.stderr:
+                    decoded = line.decode('utf-8', errors='replace').strip()
+                    self._stderr_output += decoded + "\n"
+                    # Check for error indicators
+                    if 'Error' in decoded or 'failed' in decoded.lower():
+                        self._process_error = decoded
+                        logger.error(f"FFmpeg error: {decoded}")
+        except Exception as e:
+            logger.debug(f"Stderr reader ended: {e}")
+
+    def is_process_alive(self) -> bool:
+        """Check if FFmpeg process is still running.
+
+        Returns:
+            True if process is running, False if it has exited
+        """
+        if self.process is None:
+            return False
+        return self.process.poll() is None
+
+    def get_error(self) -> Optional[str]:
+        """Get FFmpeg error message if process failed.
+
+        Returns:
+            Error message string if process failed, None if running normally
+        """
+        if self.state != RecordingState.RECORDING:
+            return None
+
+        # Check if process died unexpectedly
+        if self.process and self.process.poll() is not None:
+            # Process has exited
+            if self._process_error:
+                return self._process_error
+            # Try to extract error from stderr
+            if self._stderr_output:
+                # Look for common error patterns
+                for line in reversed(self._stderr_output.split('\n')):
+                    if 'Error' in line or 'failed' in line.lower() or 'No capable devices' in line:
+                        return line.strip()
+                # Return last non-empty line as fallback
+                for line in reversed(self._stderr_output.split('\n')):
+                    if line.strip():
+                        return line.strip()
+            return "FFmpeg process exited unexpectedly"
+        return None
+
 
 class XCompositeRecorder(FFmpegRecorder):
     """XComposite-based window tracker for video recording.
@@ -436,12 +498,12 @@ class XCompositeRecorder(FFmpegRecorder):
         cmd = self._build_rawvideo_ffmpeg_command(width, height, output_file, fps, include_mic)
 
         try:
-            # Start FFmpeg with stdin for raw frames
+            # Start FFmpeg with stdin for raw frames and stderr capture
             self.process = subprocess.Popen(
                 cmd,
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL
+                stderr=subprocess.PIPE
             )
 
             self.window_id = window_id
@@ -450,6 +512,15 @@ class XCompositeRecorder(FFmpegRecorder):
             self.start_time = time.time()
             self.state = RecordingState.RECORDING
             self.stop_flag.clear()
+            self._stderr_output = ""
+            self._process_error = None
+
+            # Start stderr reader thread
+            self._stderr_thread = threading.Thread(
+                target=self._read_stderr,
+                daemon=True
+            )
+            self._stderr_thread.start()
 
             # Start frame capture thread
             self.capture_thread = threading.Thread(
